@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "users-sarraf-coding-personal-raycast-mac-performance-monitor-",
-  "title": "/Users/sarraf/Coding/Personal/raycast-mac-performance-monitor/",
-  "description": "See stats from Mac Performance Monitor",
+  "name": "mac-performance-monitor",
+  "title": "Mac Performance Monitor",
+  "description": "Display graphs and live stats from Mac Performance Monitor app.",
   "icon": "extension-icon.png",
   "author": "SARRAF",
   "platforms": [
@@ -17,16 +17,201 @@
     {
       "name": "dashboard",
       "title": "Dashboard",
-      "subtitle": "Take a glance at your system",
-      "description": "View panels chosen in settings in a single view",
+      "subtitle": "Display your favorite panels",
+      "description": "Shows favorited panels chosen in the settings",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "panelCpuTimeline",
+          "type": "checkbox",
+          "required": false,
+          "title": "Panels",
+          "label": "CPU Usage Timeline",
+          "default": true,
+          "description": "Show CPU utilization graph over time"
+        },
+        {
+          "name": "panelCpuCores",
+          "type": "checkbox",
+          "required": false,
+          "label": "CPU Cores Grid",
+          "default": true,
+          "description": "Show utilization bars for individual P and E cores"
+        },
+        {
+          "name": "panelMemoryPressure",
+          "type": "checkbox",
+          "required": false,
+          "label": "Memory Pressure and Swap",
+          "default": true,
+          "description": "Show memory pressure graph and swap usage"
+        },
+        {
+          "name": "panelMemoryComposition",
+          "type": "checkbox",
+          "required": false,
+          "label": "Memory Composition Breakdown",
+          "default": true,
+          "description": "Show stacked bar of Wired, Active, Compressed, Cached, and Free RAM"
+        },
+        {
+          "name": "panelGpuWorkload",
+          "type": "checkbox",
+          "required": false,
+          "label": "GPU and Neural Engine Activity",
+          "default": false,
+          "description": "Show GPU graph and AI/ML workload categories"
+        },
+        {
+          "name": "panelDiskReadWrite",
+          "type": "checkbox",
+          "required": false,
+          "label": "Disk Read and Write Records",
+          "default": false,
+          "description": "Show physical disk throughput and taxonomy"
+        },
+        {
+          "name": "panelEnergyHistory",
+          "type": "checkbox",
+          "required": false,
+          "label": "Energy and Power History",
+          "default": false,
+          "description": "Show power consumption and battery graph"
+        },
+        {
+          "name": "panelThermals",
+          "type": "checkbox",
+          "required": false,
+          "label": "Thermals and Fans",
+          "default": false,
+          "description": "Show CPU/GPU die temperatures and fan speeds"
+        },
+        {
+          "name": "panelTopMemoryApps",
+          "type": "checkbox",
+          "required": false,
+          "title": "Leaderboards",
+          "label": "Top Memory Apps",
+          "default": true,
+          "description": "Show leaderboard of highest memory consuming apps"
+        },
+        {
+          "name": "panelTopCpuApps",
+          "type": "checkbox",
+          "required": false,
+          "label": "Top CPU Apps",
+          "default": true,
+          "description": "Show leaderboard of highest CPU consuming apps"
+        },
+        {
+          "name": "panelTopGpuApps",
+          "type": "checkbox",
+          "required": false,
+          "label": "Top GPU Apps",
+          "default": false,
+          "description": "Show leaderboard of highest GPU consuming apps"
+        },
+        {
+          "name": "panelTopEnergyApps",
+          "type": "checkbox",
+          "required": false,
+          "label": "Top Energy Apps",
+          "default": false,
+          "description": "Show leaderboard of highest energy consuming apps"
+        }
+      ]
+    },
+    {
+      "name": "memory",
+      "title": "Memory",
+      "subtitle": "Display Memory Pressure and App Usage",
+      "description": "Shows memory pressure, composition, and apps sorted by RAM usage",
       "mode": "view"
     },
     {
-      "name": "command-2",
-      "title": "Command 2",
-      "subtitle": "sub",
-      "description": "desc of the command",
+      "name": "cpu",
+      "title": "CPU",
+      "subtitle": "Display CPU Cores and App Usage",
+      "description": "Shows core grid, total CPU graph, and apps sorted by CPU usage",
+      "mode": "view"
+    },
+    {
+      "name": "gpu",
+      "title": "GPU",
+      "subtitle": "Display GPU Usage and AI Workloads",
+      "description": "Shows GPU graphs, AI/ML categories, and apps sorted by GPU usage",
+      "mode": "view"
+    },
+    {
+      "name": "disk",
+      "title": "Disk",
+      "subtitle": "Display Read/Write Records and App I/O",
+      "description": "Shows read/write throughput graphs, categories, and apps sorted by disk I/O",
+      "mode": "view"
+    },
+    {
+      "name": "energy",
+      "title": "Energy",
+      "subtitle": "Display Power and Thermals",
+      "description": "Shows power consumption, thermals, and apps sorted by energy impact",
+      "mode": "view"
+    },
+    {
+      "name": "copy-ai-instructions",
+      "title": "Copy AI Instructions",
+      "subtitle": "Copy Performance Context to Clipboard",
+      "description": "Copies structured context and database rules for AI agents",
       "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "defaultRange",
+      "type": "dropdown",
+      "required": false,
+      "title": "Default Time Range",
+      "description": "Time window for graphs on initial view",
+      "default": "15m",
+      "data": [
+        {
+          "title": "Last 5 Minutes",
+          "value": "5m"
+        },
+        {
+          "title": "Last 15 Minutes",
+          "value": "15m"
+        },
+        {
+          "title": "Last 1 Hour",
+          "value": "1h"
+        },
+        {
+          "title": "Last 24 Hours",
+          "value": "24h"
+        }
+      ]
+    },
+    {
+      "name": "refreshCadence",
+      "type": "dropdown",
+      "required": false,
+      "title": "Live Refresh Cadence",
+      "description": "How frequently to refresh stats while command is open",
+      "default": "2s",
+      "data": [
+        {
+          "title": "Every 1 Second",
+          "value": "1s"
+        },
+        {
+          "title": "Every 2 Seconds",
+          "value": "2s"
+        },
+        {
+          "title": "Every 5 Seconds",
+          "value": "5s"
+        }
+      ]
     }
   ],
   "tools": [],
