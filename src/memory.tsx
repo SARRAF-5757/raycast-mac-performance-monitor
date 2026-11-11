@@ -33,7 +33,7 @@ export default function Command() {
     (snapshot?.pressurePercent || 0) >= 67 ? "#FF453A" : (snapshot?.pressurePercent || 0) >= 34 ? "#FF9F0A" : "#0A84FF";
 
   const pressureChartUri = generateAreaChart(pressurePoints, {
-    label: "Memory Pressure Index",
+    label: "Memory Pressure",
     color: pressureColor,
     unit: "%",
     maxValue: 100,
@@ -50,7 +50,7 @@ export default function Command() {
       ]
     : [];
 
-  const compUri = snapshot ? generateStackedBar(slices, totalRam, "RAM Composition Breakdown") : null;
+  const compUri = snapshot ? generateStackedBar(slices, totalRam, "Memory Composition Breakdown") : null;
 
   const markdownHeader = `
 ![Memory Pressure](${pressureChartUri})

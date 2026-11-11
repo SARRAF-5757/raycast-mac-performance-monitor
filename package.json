@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "mac-performance-monitor",
   "title": "Mac Performance Monitor",
-  "description": "Display graphs and live stats from Mac Performance Monitor app.",
+  "description": "Quickly glance at your system stats provided by Mac Performance Monitor right from Raycast",
   "icon": "extension-icon.png",
   "author": "SARRAF",
   "platforms": [
@@ -17,149 +17,989 @@
     {
       "name": "dashboard",
       "title": "Dashboard",
-      "subtitle": "Display your favorite panels",
-      "description": "Shows favorited panels chosen in the settings",
+      "subtitle": "Quick view of your favorite panels",
+      "description": "Consolidated view of panels selected from all categories (CPU, Memory, etc). Configurable in extension settings",
       "mode": "view",
       "preferences": [
         {
-          "name": "panelCpuTimeline",
-          "type": "checkbox",
+          "name": "slot1",
+          "type": "dropdown",
           "required": false,
-          "title": "Panels",
-          "label": "CPU Usage Timeline",
-          "default": true,
-          "description": "Show CPU utilization graph over time"
+          "label": "Panel 1 (Left)",
+          "default": "memory_pressure",
+          "description": "Select panel for Row 1, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 1 (Left)"
         },
         {
-          "name": "panelCpuCores",
-          "type": "checkbox",
+          "name": "slot2",
+          "type": "dropdown",
           "required": false,
-          "label": "CPU Cores Grid",
-          "default": true,
-          "description": "Show utilization bars for individual P and E cores"
+          "label": "Panel 2 (Right)",
+          "default": "memory_composition",
+          "description": "Select panel for Row 1, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 2 (Right)"
         },
         {
-          "name": "panelMemoryPressure",
-          "type": "checkbox",
+          "name": "slot3",
+          "type": "dropdown",
           "required": false,
-          "label": "Memory Pressure and Swap",
-          "default": true,
-          "description": "Show memory pressure graph and swap usage"
+          "label": "Panel 3 (Left)",
+          "default": "cpu_usage",
+          "description": "Select panel for Row 2, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 3 (Left)"
         },
         {
-          "name": "panelMemoryComposition",
-          "type": "checkbox",
+          "name": "slot4",
+          "type": "dropdown",
           "required": false,
-          "label": "Memory Composition Breakdown",
-          "default": true,
-          "description": "Show stacked bar of Wired, Active, Compressed, Cached, and Free RAM"
+          "label": "Panel 4 (Right)",
+          "default": "cpu_cores",
+          "description": "Select panel for Row 2, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 4 (Right)"
         },
         {
-          "name": "panelGpuWorkload",
-          "type": "checkbox",
+          "name": "slot5",
+          "type": "dropdown",
           "required": false,
-          "label": "GPU and Neural Engine Activity",
-          "default": false,
-          "description": "Show GPU graph and AI/ML workload categories"
+          "label": "Panel 5 (Left)",
+          "default": "gpu_usage",
+          "description": "Select panel for Row 3, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 5 (Left)"
         },
         {
-          "name": "panelDiskReadWrite",
-          "type": "checkbox",
+          "name": "slot6",
+          "type": "dropdown",
           "required": false,
-          "label": "Disk Read and Write Records",
-          "default": false,
-          "description": "Show physical disk throughput and taxonomy"
+          "label": "Panel 6 (Right)",
+          "default": "gpu_breakdown",
+          "description": "Select panel for Row 3, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 6 (Right)"
         },
         {
-          "name": "panelEnergyHistory",
-          "type": "checkbox",
+          "name": "slot7",
+          "type": "dropdown",
           "required": false,
-          "label": "Energy and Power History",
-          "default": false,
-          "description": "Show power consumption and battery graph"
+          "label": "Panel 7 (Left)",
+          "default": "disk_io",
+          "description": "Select panel for Row 4, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 7 (Left)"
         },
         {
-          "name": "panelThermals",
-          "type": "checkbox",
+          "name": "slot8",
+          "type": "dropdown",
           "required": false,
-          "label": "Thermals and Fans",
-          "default": false,
-          "description": "Show CPU/GPU die temperatures and fan speeds"
+          "label": "Panel 8 (Right)",
+          "default": "power_consumption",
+          "description": "Select panel for Row 4, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 8 (Right)"
         },
         {
-          "name": "panelTopMemoryApps",
-          "type": "checkbox",
+          "name": "slot9",
+          "type": "dropdown",
           "required": false,
-          "title": "Leaderboards",
-          "label": "Top Memory Apps",
-          "default": true,
-          "description": "Show leaderboard of highest memory consuming apps"
+          "label": "Panel 9 (Left)",
+          "default": "thermals",
+          "description": "Select panel for Row 5, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 9 (Left)"
         },
         {
-          "name": "panelTopCpuApps",
-          "type": "checkbox",
+          "name": "slot10",
+          "type": "dropdown",
           "required": false,
-          "label": "Top CPU Apps",
-          "default": true,
-          "description": "Show leaderboard of highest CPU consuming apps"
+          "label": "Panel 10 (Right)",
+          "default": "none",
+          "description": "Select panel for Row 5, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 10 (Right)"
         },
         {
-          "name": "panelTopGpuApps",
-          "type": "checkbox",
+          "name": "slot11",
+          "type": "dropdown",
           "required": false,
-          "label": "Top GPU Apps",
-          "default": false,
-          "description": "Show leaderboard of highest GPU consuming apps"
+          "label": "Panel 11 (Left)",
+          "default": "top_memory",
+          "description": "Select panel for Row 6, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 11 (Left)"
         },
         {
-          "name": "panelTopEnergyApps",
-          "type": "checkbox",
+          "name": "slot12",
+          "type": "dropdown",
           "required": false,
-          "label": "Top Energy Apps",
-          "default": false,
-          "description": "Show leaderboard of highest energy consuming apps"
+          "label": "Panel 12 (Right)",
+          "default": "top_cpu",
+          "description": "Select panel for Row 6, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 12 (Right)"
+        },
+        {
+          "name": "slot13",
+          "type": "dropdown",
+          "required": false,
+          "label": "Panel 13 (Left)",
+          "default": "top_gpu",
+          "description": "Select panel for Row 7, Left",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 13 (Left)"
+        },
+        {
+          "name": "slot14",
+          "type": "dropdown",
+          "required": false,
+          "label": "Panel 14 (Right)",
+          "default": "top_energy",
+          "description": "Select panel for Row 7, Right",
+          "data": [
+            {
+              "title": "None",
+              "value": "none"
+            },
+            {
+              "title": "Memory Pressure",
+              "value": "memory_pressure"
+            },
+            {
+              "title": "Memory Composition Breakdown",
+              "value": "memory_composition"
+            },
+            {
+              "title": "CPU Usage",
+              "value": "cpu_usage"
+            },
+            {
+              "title": "CPU Cores",
+              "value": "cpu_cores"
+            },
+            {
+              "title": "GPU Usage",
+              "value": "gpu_usage"
+            },
+            {
+              "title": "GPU Usage Breakdown",
+              "value": "gpu_breakdown"
+            },
+            {
+              "title": "Disk Read & Write Records",
+              "value": "disk_io"
+            },
+            {
+              "title": "Power Consumption",
+              "value": "power_consumption"
+            },
+            {
+              "title": "Thermals",
+              "value": "thermals"
+            },
+            {
+              "title": "Top Memory Users",
+              "value": "top_memory"
+            },
+            {
+              "title": "Top CPU Users",
+              "value": "top_cpu"
+            },
+            {
+              "title": "Top GPU Users",
+              "value": "top_gpu"
+            },
+            {
+              "title": "Top Energy Users",
+              "value": "top_energy"
+            }
+          ],
+          "title": "Panel 14 (Right)"
         }
       ]
     },
     {
       "name": "memory",
       "title": "Memory",
-      "subtitle": "Display Memory Pressure and App Usage",
-      "description": "Shows memory pressure, composition, and apps sorted by RAM usage",
+      "subtitle": "View everything related to memory",
+      "description": "Shows memory pressure, composition, and apps sorted by RAM usage.",
       "mode": "view"
     },
     {
       "name": "cpu",
       "title": "CPU",
-      "subtitle": "Display CPU Cores and App Usage",
+      "subtitle": "View everything related to the CPU",
       "description": "Shows core grid, total CPU graph, and apps sorted by CPU usage",
       "mode": "view"
     },
     {
       "name": "gpu",
       "title": "GPU",
-      "subtitle": "Display GPU Usage and AI Workloads",
-      "description": "Shows GPU graphs, AI/ML categories, and apps sorted by GPU usage",
+      "subtitle": "View everything related to the GPU",
+      "description": "Shows GPU graphs, usage category breakdown, and apps sorted by GPU usage",
       "mode": "view"
     },
     {
       "name": "disk",
       "title": "Disk",
-      "subtitle": "Display Read/Write Records and App I/O",
-      "description": "Shows read/write throughput graphs, categories, and apps sorted by disk I/O",
+      "subtitle": "View everything related to disk read/writes",
+      "description": "Shows read/write throughput graphs and apps sorted by disk I/O",
       "mode": "view"
     },
     {
       "name": "energy",
       "title": "Energy",
-      "subtitle": "Display Power and Thermals",
+      "subtitle": "View everything related to power usage & thermals",
       "description": "Shows power consumption, thermals, and apps sorted by energy impact",
       "mode": "view"
     },
     {
       "name": "copy-ai-instructions",
       "title": "Copy AI Instructions",
-      "subtitle": "Copy Performance Context to Clipboard",
+      "subtitle": "Copy Data Context to Clipboard for Agents",
       "description": "Copies structured context and database rules for AI agents",
       "mode": "no-view"
     }
@@ -197,7 +1037,7 @@
       "required": false,
       "title": "Live Refresh Cadence",
       "description": "How frequently to refresh stats while command is open",
-      "default": "2s",
+      "default": "5s",
       "data": [
         {
           "title": "Every 1 Second",

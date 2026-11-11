@@ -406,6 +406,7 @@ export function generateDualAreaChart(
   options: {
     width?: number;
     height?: number;
+    title?: string;
     labelA: string;
     labelB: string;
     colorA: string;
@@ -490,6 +491,24 @@ export function generateDualAreaChart(
       <text x="340" y="23" fill="${options.colorB}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700">${latestB.toFixed(1)} ${unit}</text>
     `;
 
+  const headerContent = options.title
+    ? isCompact
+      ? `
+        <text x="16" y="24" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.title)}</text>
+        <circle cx="${width - 132}" cy="20" r="3.5" fill="${options.colorA}"/>
+        <text x="${width - 124}" y="24" fill="${options.colorA}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">${latestA.toFixed(1)}</text>
+        <circle cx="${width - 70}" cy="20" r="3.5" fill="${options.colorB}"/>
+        <text x="${width - 62}" y="24" fill="${options.colorB}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">${latestB.toFixed(1)}${unit}</text>
+      `
+      : `
+        <text x="16" y="23" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">${escapeXml(options.title)}</text>
+        <circle cx="${width - 310}" cy="19" r="4" fill="${options.colorA}"/>
+        <text x="${width - 300}" y="23" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.labelA)}: <tspan fill="${options.colorA}" font-weight="700">${latestA.toFixed(1)} ${unit}</tspan></text>
+        <circle cx="${width - 150}" cy="19" r="4" fill="${options.colorB}"/>
+        <text x="${width - 140}" y="23" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.labelB)}: <tspan fill="${options.colorB}" font-weight="700">${latestB.toFixed(1)} ${unit}</tspan></text>
+      `
+    : `${legendA}\n  ${legendB}`;
+
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -524,8 +543,7 @@ export function generateDualAreaChart(
   <circle cx="${curveB.last.x}" cy="${curveB.last.y}" r="3" fill="#FFF" stroke="${options.colorB}" stroke-width="2"/>
 
   <!-- Legend & Values -->
-  ${legendA}
-  ${legendB}
+  ${headerContent}
 </svg>
   `.trim();
 
@@ -588,7 +606,7 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${width}" height="${height}" rx="10" fill="#161618" stroke="#28282C" stroke-width="1"/>
   
-  <text x="16" y="22" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">CPU Core Utilisation</text>
+  <text x="16" y="22" fill="#E6E6EA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">CPU Cores</text>
   <text x="${width - 16}" y="22" fill="#9898A2" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${pCores.length}P + ${eCores.length}E</text>
 
   ${coreNodes.join("\n")}

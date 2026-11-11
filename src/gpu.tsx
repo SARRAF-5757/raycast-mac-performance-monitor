@@ -29,7 +29,7 @@ export default function Command() {
 
   const gpuPoints = history.map((h) => h.gpuPercent);
   const gpuChartUri = generateAreaChart(gpuPoints, {
-    label: "GPU Utilisation",
+    label: "GPU Usage",
     color: "#30D158",
     unit: "%",
     maxValue: 100,
@@ -48,7 +48,7 @@ export default function Command() {
     { label: "Other", value: gpuWorkload.other, color: "#8E8E93", formatted: `${gpuWorkload.other.toFixed(1)}%` },
   ];
 
-  const workloadUri = totalGpu > 0 ? generateStackedBar(gpuSlices, totalGpu, "GPU Workload Split") : null;
+  const workloadUri = totalGpu > 0 ? generateStackedBar(gpuSlices, totalGpu, "GPU Usage Breakdown") : null;
 
   const markdownHeader = `
 ![GPU Chart](${gpuChartUri})

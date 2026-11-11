@@ -15,13 +15,15 @@ import { SubprocessList } from "./components/SubprocessList";
 import { classifyProcessWorkload } from "./data/queries";
 import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
-import { generateDualAreaChart, generateStackedBar } from "./utils/charts";
+import { generateDualAreaChart } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
 import { formatBytes, formatIops, formatLatency, formatPercent, formatRate } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, diskWorkload, isLoading, isInactive, lastUpdated, refresh } =
-    useLiveStats({ sortMetric: "disk", appLimit: 40 });
+  const { snapshot, history, range, setRange, apps, isLoading, isInactive, lastUpdated, refresh } = useLiveStats({
+    sortMetric: "disk",
+    appLimit: 40,
+  });
 
   if (!snapshot && isInactive) {
     return <InactiveNotice lastUpdated={lastUpdated} />;
@@ -30,6 +32,8 @@ export default function Command() {
   const readPoints = history.map((h) => h.diskReadMb);
   const writePoints = history.map((h) => h.diskWriteMb);
   const diskChartUri = generateDualAreaChart(readPoints, writePoints, {
+    height: 300,
+    title: "Disk Read & Write Records",
     labelA: "Disk Read",
     labelB: "Disk Write",
     colorA: "#64D2FF",
@@ -37,20 +41,9 @@ export default function Command() {
     unit: "MB/s",
   });
 
-  const totalDisk = diskWorkload.aiMl + diskWorkload.displayUi + diskWorkload.media + diskWorkload.other;
-  const diskSlices = [
-    { label: "AI & ML", value: diskWorkload.aiMl, color: "#BF5AF2" },
-    { label: "Display/UI", value: diskWorkload.displayUi, color: "#0A84FF" },
-    { label: "Media", value: diskWorkload.media, color: "#FF9F0A" },
-    { label: "Other", value: diskWorkload.other, color: "#8E8E93" },
-  ];
-
-  const taxonomyUri = totalDisk > 0 ? generateStackedBar(diskSlices, totalDisk, "Disk Workload Taxonomy") : null;
-
+  const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
-![Disk Throughput](${diskChartUri})
-
-${taxonomyUri ? `![Taxonomy](${taxonomyUri})` : ""}
+![Disk Read & Write Records - ${tick}](${diskChartUri}?raycast-width=760)
   `.trim();
 
   return (

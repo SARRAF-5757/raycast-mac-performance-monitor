@@ -30,7 +30,7 @@ export default function Command() {
 
   const powerPoints = history.map((h) => h.batteryWatts);
   const powerChartUri = generateAreaChart(powerPoints, {
-    label: "Power Draw History",
+    label: "Power Consumption",
     color: "#FFD60A",
     unit: "W",
   });
@@ -38,6 +38,7 @@ export default function Command() {
   const cpuTemps = history.map((h) => h.cpuTemp || 0);
   const gpuTemps = history.map((h) => h.gpuTemp || 0);
   const thermalChartUri = generateDualAreaChart(cpuTemps, gpuTemps, {
+    title: "Thermals",
     labelA: "CPU Die",
     labelB: "GPU Die",
     colorA: "#FF453A",
@@ -46,7 +47,7 @@ export default function Command() {
   });
 
   const markdownHeader = `
-![Power Draw](${powerChartUri})
+![Power Consumption](${powerChartUri})
 
 ![Thermals](${thermalChartUri})
   `.trim();

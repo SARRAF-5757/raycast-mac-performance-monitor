@@ -29,7 +29,7 @@ export default function Command() {
 
   const cpuPoints = history.map((h) => h.cpuPercent);
   const cpuChartUri = generateAreaChart(cpuPoints, {
-    label: "Total CPU Utilisation",
+    label: "CPU Usage",
     color: "#BF5AF2",
     unit: "%",
     maxValue: 100,
@@ -38,7 +38,7 @@ export default function Command() {
   const coreGridUri = cores.length > 0 ? generateCoreGrid(cores) : null;
 
   const markdownHeader = `
-![CPU Trend](${cpuChartUri})
+![CPU Usage](${cpuChartUri})
 
 ${coreGridUri ? `![Core Grid](${coreGridUri})` : ""}
   `.trim();

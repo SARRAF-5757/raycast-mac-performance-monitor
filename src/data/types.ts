@@ -106,18 +106,20 @@ export interface MacTopology {
 export type TimeRange = "5m" | "15m" | "1h" | "24h";
 
 export interface DashboardPreferences {
-  panelCpuTimeline?: boolean;
-  panelCpuCores?: boolean;
-  panelMemoryPressure?: boolean;
-  panelMemoryComposition?: boolean;
-  panelGpuWorkload?: boolean;
-  panelDiskReadWrite?: boolean;
-  panelEnergyHistory?: boolean;
-  panelThermals?: boolean;
-  panelTopMemoryApps?: boolean;
-  panelTopCpuApps?: boolean;
-  panelTopGpuApps?: boolean;
-  panelTopEnergyApps?: boolean;
+  slot1?: string;
+  slot2?: string;
+  slot3?: string;
+  slot4?: string;
+  slot5?: string;
+  slot6?: string;
+  slot7?: string;
+  slot8?: string;
+  slot9?: string;
+  slot10?: string;
+  slot11?: string;
+  slot12?: string;
+  slot13?: string;
+  slot14?: string;
 }
 
 export interface GlobalPreferences {
