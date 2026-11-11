@@ -37,10 +37,11 @@ export default function Command() {
 
   const coreGridUri = cores.length > 0 ? generateCoreGrid(cores) : null;
 
+  const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
-![CPU Usage](${cpuChartUri})
+![CPU Usage - ${tick}](${cpuChartUri}?raycast-width=760)
 
-${coreGridUri ? `![Core Grid](${coreGridUri})` : ""}
+${coreGridUri ? `![CPU Cores - ${tick}](${coreGridUri}?raycast-width=760)` : ""}
   `.trim();
 
   return (

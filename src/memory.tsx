@@ -52,10 +52,11 @@ export default function Command() {
 
   const compUri = snapshot ? generateStackedBar(slices, totalRam, "Memory Composition Breakdown") : null;
 
+  const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
-![Memory Pressure](${pressureChartUri})
+![Memory Pressure - ${tick}](${pressureChartUri}?raycast-width=760)
 
-${compUri ? `![Composition](${compUri})` : ""}
+${compUri ? `![Memory Composition Breakdown - ${tick}](${compUri}?raycast-width=760)` : ""}
   `.trim();
 
   return (

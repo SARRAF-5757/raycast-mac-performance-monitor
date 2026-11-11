@@ -50,10 +50,11 @@ export default function Command() {
 
   const workloadUri = totalGpu > 0 ? generateStackedBar(gpuSlices, totalGpu, "GPU Usage Breakdown") : null;
 
+  const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
-![GPU Chart](${gpuChartUri})
+![GPU Usage - ${tick}](${gpuChartUri}?raycast-width=760)
 
-${workloadUri ? `![Workload Split](${workloadUri})` : ""}
+${workloadUri ? `![GPU Usage Breakdown - ${tick}](${workloadUri}?raycast-width=760)` : ""}
   `.trim();
 
   return (

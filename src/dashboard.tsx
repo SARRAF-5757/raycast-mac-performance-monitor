@@ -24,6 +24,7 @@ export default function Command() {
     return <InactiveNotice lastUpdated={lastUpdated} />;
   }
 
+  const tick = snapshot?.timestamp ?? Date.now();
   const sections: string[] = [];
 
   // Warning pills: if there are any warnings, show up at the very top as small rounded pills (roughly quarter width each)
@@ -89,7 +90,7 @@ export default function Command() {
 
     const warningPillsUri = generateWarningPills(warnings, 760);
     if (warningPillsUri) {
-      sections.push(`![Warning Pills](${warningPillsUri}?raycast-width=760)`);
+      sections.push(`![Warning Pills - ${tick}](${warningPillsUri}?raycast-width=760)`);
     }
   }
 
@@ -279,7 +280,6 @@ export default function Command() {
     prefs.slot14 ?? "top_energy",
   ];
 
-  const tick = snapshot?.timestamp ?? Date.now();
   let rowCount = 0;
 
   for (let i = 0; i < slotList.length; i += 2) {

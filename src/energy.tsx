@@ -46,10 +46,11 @@ export default function Command() {
     unit: "°C",
   });
 
+  const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
-![Power Consumption](${powerChartUri})
+![Power Consumption - ${tick}](${powerChartUri}?raycast-width=760)
 
-![Thermals](${thermalChartUri})
+![Thermals - ${tick}](${thermalChartUri}?raycast-width=760)
   `.trim();
 
   return (
