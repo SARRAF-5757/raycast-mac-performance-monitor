@@ -17,8 +17,10 @@ import { formatBytes, formatPercent, formatTemp } from "./utils/formatting";
 
 export default function Command() {
   const prefs = getPreferenceValues<DashboardPreferences>();
-  const { snapshot, history, range, setRange, cores, apps, gpuWorkload, isLoading, isInactive, lastUpdated, refresh } =
-    useLiveStats({ sortMetric: "cpu", appLimit: 50 });
+  const { snapshot, history, cores, apps, gpuWorkload, isLoading, isInactive, lastUpdated } = useLiveStats({
+    sortMetric: "cpu",
+    appLimit: 50,
+  });
 
   if (!snapshot && isInactive) {
     return <InactiveNotice lastUpdated={lastUpdated} />;
@@ -312,46 +314,12 @@ export default function Command() {
       markdown={markdown}
       actions={
         <ActionPanel>
-          <ActionPanel.Section title={`History Window (Current: ${range})`}>
-            <Action
-              title="5 Minutes Range"
-              icon={Icon.Clock}
-              shortcut={{ modifiers: ["cmd"], key: "1" }}
-              onAction={() => setRange("5m")}
-            />
-            <Action
-              title="15 Minutes Range"
-              icon={Icon.Clock}
-              shortcut={{ modifiers: ["cmd"], key: "2" }}
-              onAction={() => setRange("15m")}
-            />
-            <Action
-              title="1 Hour Range"
-              icon={Icon.Clock}
-              shortcut={{ modifiers: ["cmd"], key: "3" }}
-              onAction={() => setRange("1h")}
-            />
-            <Action
-              title="24 Hours Range"
-              icon={Icon.Clock}
-              shortcut={{ modifiers: ["cmd"], key: "4" }}
-              onAction={() => setRange("24h")}
-            />
-          </ActionPanel.Section>
-          <ActionPanel.Section title="App Actions">
-            <Action
-              title="Refresh Stats"
-              icon={Icon.ArrowClockwise}
-              shortcut={Keyboard.Shortcut.Common.Refresh}
-              onAction={refresh}
-            />
-            <Action
-              title="Open in Mac Performance Monitor"
-              icon={Icon.AppWindow}
-              shortcut={Keyboard.Shortcut.Common.Open}
-              onAction={openApp}
-            />
-          </ActionPanel.Section>
+          <Action
+            title="Open Mac Performance Monitor"
+            icon={Icon.AppWindow}
+            shortcut={Keyboard.Shortcut.Common.Open}
+            onAction={openApp}
+          />
         </ActionPanel>
       }
     />

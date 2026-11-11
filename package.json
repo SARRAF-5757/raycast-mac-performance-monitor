@@ -1037,7 +1037,7 @@
       "required": false,
       "title": "Live Refresh Cadence",
       "description": "How frequently to refresh stats while command is open",
-      "default": "5s",
+      "default": "2s",
       "data": [
         {
           "title": "Every 1 Second",

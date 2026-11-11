@@ -88,7 +88,7 @@ export function SubprocessList({ appName }: { appName: string }) {
                       />
                     ) : null}
                     <Action
-                      title="Open in Mac Performance Monitor"
+                      title="Open Mac Performance Monitor"
                       icon={Icon.AppWindow}
                       shortcut={Keyboard.Shortcut.Common.Open}
                       onAction={openApp}

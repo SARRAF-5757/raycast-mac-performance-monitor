@@ -1,15 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  Clipboard,
-  Color,
-  Icon,
-  Keyboard,
-  List,
-  showInFinder,
-  showToast,
-  Toast,
-} from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List } from "@raycast/api";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { SubprocessList } from "./components/SubprocessList";
 import { classifyProcessWorkload } from "./data/queries";
@@ -20,8 +9,10 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatPercent, formatTemp, formatWatts } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, gpuWorkload, isLoading, isInactive, lastUpdated, refresh } =
-    useLiveStats({ sortMetric: "gpu", appLimit: 40 });
+  const { snapshot, history, range, setRange, apps, gpuWorkload, isLoading, isInactive, lastUpdated } = useLiveStats({
+    sortMetric: "gpu",
+    appLimit: 40,
+  });
 
   if (!snapshot && isInactive) {
     return <InactiveNotice lastUpdated={lastUpdated} />;
@@ -151,44 +142,12 @@ ${workloadUri ? `![GPU Usage Breakdown - ${tick}](${workloadUri}?raycast-width=7
                     icon={Icon.List}
                     target={<SubprocessList appName={app.appName} />}
                   />
-                  <ActionPanel.Section title="App Actions">
-                    {app.executablePath ? (
-                      <Action
-                        title="Reveal in Finder"
-                        icon={Icon.Finder}
-                        shortcut={{ modifiers: ["cmd"], key: "f" }}
-                        onAction={async () => {
-                          try {
-                            if (app.executablePath) await showInFinder(app.executablePath);
-                          } catch {
-                            await showToast({ style: Toast.Style.Failure, title: "Could not reveal in Finder" });
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <Action
-                      title="Copy App Stats"
-                      icon={Icon.CopyClipboard}
-                      shortcut={{ modifiers: ["cmd"], key: "c" }}
-                      onAction={async () => {
-                        const text = `${app.appName}: ${app.gpuPercent.toFixed(1)}% GPU, ${categoryLabels[category]}`;
-                        await Clipboard.copy(text);
-                        await showToast({ style: Toast.Style.Success, title: "Copied Stats to Clipboard" });
-                      }}
-                    />
-                    <Action
-                      title="Open in Mac Performance Monitor"
-                      icon={Icon.AppWindow}
-                      shortcut={Keyboard.Shortcut.Common.Open}
-                      onAction={openApp}
-                    />
-                    <Action
-                      title="Refresh"
-                      icon={Icon.ArrowClockwise}
-                      shortcut={Keyboard.Shortcut.Common.Refresh}
-                      onAction={refresh}
-                    />
-                  </ActionPanel.Section>
+                  <Action
+                    title="Open Mac Performance Monitor"
+                    icon={Icon.AppWindow}
+                    shortcut={Keyboard.Shortcut.Common.Open}
+                    onAction={openApp}
+                  />
                 </ActionPanel>
               }
             />
