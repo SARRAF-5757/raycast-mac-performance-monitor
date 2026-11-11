@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import os from "os";
 import { querySqlite } from "./db";
 import {
@@ -385,8 +386,28 @@ export async function getMacTopology(): Promise<MacTopology> {
   const totalLogical = cpus.length;
   const chipModel = cpus[0]?.model || "Apple Silicon";
 
-  const pCores = metaMap.get("agent.performance_cores") ?? Math.floor(totalLogical / 2);
-  const eCores = metaMap.get("agent.efficiency_cores") ?? totalLogical - pCores;
+  let pCores = metaMap.get("agent.performance_cores");
+  let eCores = metaMap.get("agent.efficiency_cores");
+
+  if (pCores === undefined || eCores === undefined) {
+    try {
+      const out = execSync("sysctl -n hw.perflevel0.logicalcpu hw.perflevel1.logicalcpu", {
+        encoding: "utf-8",
+        timeout: 1000,
+      })
+        .trim()
+        .split(/\s+/);
+      if (out.length >= 2) {
+        pCores = parseInt(out[0], 10);
+        eCores = parseInt(out[1], 10);
+      }
+    } catch {
+      // Fallback if sysctl fails
+    }
+  }
+
+  pCores = pCores ?? Math.floor(totalLogical / 2);
+  eCores = eCores ?? totalLogical - pCores;
   const totalRam = metaMap.get("agent.memory_bytes") ?? os.totalmem();
 
   return {
@@ -405,11 +426,10 @@ export function sampleCoreUsage(topology: MacTopology): CoreUsage[] {
   const currentCpus = os.cpus();
   if (!previousCpuTimes || previousCpuTimes.length !== currentCpus.length) {
     previousCpuTimes = currentCpus.map((c) => c.times);
-    // Return empty / zero on initial measurement
+    // Return empty or zero on initial measurement
     return currentCpus.map((_, index) => {
       const isEfficiency =
-        index < topology.efficiencyCoreCount &&
-        topology.efficiencyCoreCount + topology.performanceCoreCount === currentCpus.length;
+        index < topology.efficiencyCores && topology.efficiencyCores + topology.performanceCores === currentCpus.length;
       return {
         index,
         kind: isEfficiency ? "efficiency" : "performance",
@@ -430,8 +450,7 @@ export function sampleCoreUsage(topology: MacTopology): CoreUsage[] {
 
     const busyShare = totalDelta > 0 ? ((userDelta + sysDelta) / totalDelta) * 100 : 0;
     const isEfficiency =
-      i < topology.efficiencyCoreCount &&
-      topology.efficiencyCoreCount + topology.performanceCoreCount === currentCpus.length;
+      i < topology.efficiencyCores && topology.efficiencyCores + topology.performanceCores === currentCpus.length;
 
     results.push({
       index: i,

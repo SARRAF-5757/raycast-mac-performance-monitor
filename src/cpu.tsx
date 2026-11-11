@@ -64,7 +64,7 @@ ${coreGridUri ? `![CPU Cores - ${tick}](${coreGridUri}?raycast-width=760)` : ""}
             <List.Item
               key={app.appName}
               title={app.appName}
-              icon={Icon.Cpu}
+              icon={Icon.ComputerChip}
               accessories={[
                 { text: `${formatPercent(app.cpuPercent)}`, tooltip: "Total CPU Percentage across subprocesses" },
                 { text: `${app.processCount} proc`, tooltip: "Processes in App Coalition" },

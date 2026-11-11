@@ -685,8 +685,11 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
   const pCores = cores.filter((c) => c.kind === "performance");
   const eCores = cores.filter((c) => c.kind === "efficiency");
 
+  // Present Performance cluster first, then Efficiency cluster (matching the header)
+  const orderedCores = eCores.length > 0 ? [...pCores, ...eCores] : cores;
+
   const isCompact = width <= 400;
-  const colCount = isCompact ? 4 : Math.min(8, Math.max(4, Math.ceil(cores.length / 2)));
+  const colCount = isCompact ? 4 : Math.min(8, Math.max(4, Math.ceil(orderedCores.length / 2)));
   const padding = 16;
   const availWidth = width - padding * 2;
   const gap = isCompact ? 6 : 8;
@@ -698,7 +701,14 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
     const isP = core.kind === "performance";
     const color = isP ? theme.cpu : theme.gpu;
     const labelPrefix = isP ? "P" : "E";
-    const coreLabel = `${labelPrefix}${core.index}`;
+
+    // Cluster-relative numbering (P0..P3, E0..E3)
+    const clusterIndex = isP
+      ? eCores.length > 0 && core.index >= eCores.length
+        ? core.index - eCores.length
+        : core.index
+      : core.index;
+    const coreLabel = `${labelPrefix}${clusterIndex}`;
     const fillWidth = Math.max(3, Math.round(((colWidth - (isCompact ? 12 : 16)) * core.usage) / 100));
 
     if (isCompact) {
@@ -725,20 +735,22 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
   };
 
   const coreNodes: string[] = [];
-  for (let i = 0; i < cores.length; i++) {
+  for (let i = 0; i < orderedCores.length; i++) {
     const row = Math.floor(i / colCount);
     const col = i % colCount;
     const x = padding + col * (colWidth + gap);
     const y = startY + row * (rowHeight + (isCompact ? 4 : 0));
-    coreNodes.push(renderCoreBar(cores[i], x, y));
+    coreNodes.push(renderCoreBar(orderedCores[i], x, y));
   }
+
+  const titleSubtitle = eCores.length > 0 ? `${pCores.length}P + ${eCores.length}E` : `${pCores.length} Cores`;
 
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
   
   <text x="16" y="22" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">CPU Cores</text>
-  <text x="${width - 16}" y="22" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${pCores.length}P + ${eCores.length}E</text>
+  <text x="${width - 16}" y="22" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${titleSubtitle}</text>
 
   ${coreNodes.join("\n")}
 </svg>
