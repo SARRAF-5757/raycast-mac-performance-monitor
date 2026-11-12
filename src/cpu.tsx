@@ -43,7 +43,9 @@ ${coreGridUri ? `![CPU Cores - ${tick}](${coreGridUri}?raycast-width=760)` : ""}
         <List.Dropdown tooltip="History Window" value={range} onChange={(newVal) => setRange(newVal as TimeRange)}>
           <List.Dropdown.Item title="Last 5 Minutes" value="5m" />
           <List.Dropdown.Item title="Last 15 Minutes" value="15m" />
+          <List.Dropdown.Item title="Last 30 Minutes" value="30m" />
           <List.Dropdown.Item title="Last 1 Hour" value="1h" />
+          <List.Dropdown.Item title="Last 6 Hours" value="6h" />
           <List.Dropdown.Item title="Last 24 Hours" value="24h" />
         </List.Dropdown>
       }

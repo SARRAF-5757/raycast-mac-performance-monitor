@@ -103,7 +103,7 @@ export interface MacTopology {
   model: string;
 }
 
-export type TimeRange = "5m" | "15m" | "1h" | "24h";
+export type TimeRange = "5m" | "15m" | "30m" | "1h" | "6h" | "24h";
 
 export interface DashboardPreferences {
   slot1?: string;

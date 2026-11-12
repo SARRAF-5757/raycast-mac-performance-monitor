@@ -127,8 +127,12 @@ export function rangeToSeconds(range: TimeRange): number {
       return 300;
     case "15m":
       return 900;
+    case "30m":
+      return 1800;
     case "1h":
       return 3600;
+    case "6h":
+      return 21600;
     case "24h":
       return 86400;
   }

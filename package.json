@@ -1022,8 +1022,16 @@
           "value": "15m"
         },
         {
+          "title": "Last 30 Minutes",
+          "value": "30m"
+        },
+        {
           "title": "Last 1 Hour",
           "value": "1h"
+        },
+        {
+          "title": "Last 6 Hours",
+          "value": "6h"
         },
         {
           "title": "Last 24 Hours",
