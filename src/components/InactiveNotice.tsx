@@ -1,32 +1,21 @@
-import { Action, ActionPanel, Color, Detail, Icon } from "@raycast/api";
+import { Action, ActionPanel, Detail, Icon } from "@raycast/api";
+import { generateInactiveSvg } from "../utils/charts";
 import { openApp } from "../utils/deepLink";
-import { formatTime } from "../utils/formatting";
 
-export function InactiveNotice({ lastUpdated }: { lastUpdated: Date | null }) {
-  const timeStr = lastUpdated ? formatTime(Math.floor(lastUpdated.getTime() / 1000)) : "Unknown";
-
-  const markdown = `
-# Mac Performance Monitor is Not Recording
-
-The app is currently paused or not running. Showing the last recorded snapshot from **${timeStr}**.
-
-Launch **Mac Performance Monitor** to resume live real-time metrics and logging.
-  `.trim();
+/**
+ * Notice view presented when the native Mac Performance Monitor app is not running.
+ * Displays a clean blank screen with an icon and centered message stating the app is not running.
+ * Pressing Enter opens the native Mac Performance Monitor app.
+ */
+export function InactiveNotice() {
+  const svg = generateInactiveSvg();
 
   return (
     <Detail
-      markdown={markdown}
-      metadata={
-        <Detail.Metadata>
-          <Detail.Metadata.TagList title="Status">
-            <Detail.Metadata.TagList.Item text="Paused / Inactive" color={Color.Yellow} />
-          </Detail.Metadata.TagList>
-          <Detail.Metadata.Label title="Last Recorded" text={timeStr} />
-        </Detail.Metadata>
-      }
+      markdown={`![Mac Performance Monitor isn't running](${svg}?raycast-width=760)`}
       actions={
         <ActionPanel>
-          <Action title="Launch Mac Performance Monitor" icon={Icon.Play} onAction={openApp} />
+          <Action title="Open Mac Performance Monitor" icon={Icon.AppWindow} onAction={openApp} />
         </ActionPanel>
       }
     />

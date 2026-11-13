@@ -17,13 +17,17 @@ import { formatBytes, formatPercent, formatTemp } from "./utils/formatting";
 
 export default function Command() {
   const prefs = getPreferenceValues<DashboardPreferences>();
-  const { snapshot, history, cores, apps, gpuWorkload, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, cores, apps, gpuWorkload, isLoading, isInactive } = useLiveStats({
     sortMetric: "cpu",
     appLimit: 50,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <Detail isLoading={true} />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const tick = snapshot?.timestamp ?? Date.now();

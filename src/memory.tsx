@@ -8,13 +8,17 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatPercent } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
     sortMetric: "memory",
     appLimit: 40,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <List isLoading={true} searchBarPlaceholder="Loading memory telemetry..." />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const pressurePoints = history.map((h) => h.memoryPressure);

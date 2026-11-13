@@ -9,13 +9,17 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatPercent, formatTemp, formatWatts } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, gpuWorkload, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, range, setRange, apps, gpuWorkload, isLoading, isInactive } = useLiveStats({
     sortMetric: "gpu",
     appLimit: 40,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <List isLoading={true} searchBarPlaceholder="Loading GPU telemetry..." />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const gpuPoints = history.map((h) => h.gpuPercent);

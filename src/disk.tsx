@@ -9,13 +9,17 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatIops, formatLatency, formatPercent, formatRate } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
     sortMetric: "disk",
     appLimit: 40,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <List isLoading={true} searchBarPlaceholder="Loading disk telemetry..." />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const readPoints = history.map((h) => h.diskReadMb);

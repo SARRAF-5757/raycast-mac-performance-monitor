@@ -8,13 +8,17 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatPercent, formatTemp, formatWatts } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
     sortMetric: "energy",
     appLimit: 40,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <List isLoading={true} searchBarPlaceholder="Loading energy telemetry..." />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const powerPoints = history.map((h) => h.batteryWatts);

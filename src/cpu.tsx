@@ -8,13 +8,17 @@ import { openApp } from "./utils/deepLink";
 import { formatBytes, formatPercent } from "./utils/formatting";
 
 export default function Command() {
-  const { snapshot, history, range, setRange, cores, apps, isLoading, isInactive, lastUpdated } = useLiveStats({
+  const { snapshot, history, range, setRange, cores, apps, isLoading, isInactive } = useLiveStats({
     sortMetric: "cpu",
     appLimit: 40,
   });
 
-  if (!snapshot && isInactive) {
-    return <InactiveNotice lastUpdated={lastUpdated} />;
+  if (isLoading && !snapshot) {
+    return <List isLoading={true} searchBarPlaceholder="Loading CPU telemetry..." />;
+  }
+
+  if (isInactive) {
+    return <InactiveNotice />;
   }
 
   const cpuPoints = history.map((h) => h.cpuPercent);
