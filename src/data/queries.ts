@@ -219,158 +219,325 @@ export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryP
   }));
 }
 
-interface RawAppGroupRow {
-  app_name: string;
-  process_count: number;
-  memory_bytes: number;
-  cpu_percent: number;
-  gpu_percent: number;
-  disk_read_bytes: number;
-  disk_written_bytes: number;
-  energy_impact: number;
-  primary_pid: number;
+export function extractAppNameFromPath(filePath?: string | null): string | null {
+  if (!filePath) return null;
+  const match = filePath.match(/(?:^|\/)([^/]+)\.app(?:\/|$)/i);
+  return match ? match[1] : null;
+}
+
+function resolveProcessName(name: string, executablePath?: string | null): string {
+  if (executablePath && executablePath.includes("/") && name.length >= 15) {
+    const lastSlash = executablePath.lastIndexOf("/");
+    if (lastSlash >= 0 && lastSlash < executablePath.length - 1) {
+      return executablePath.substring(lastSlash + 1);
+    }
+  }
+  return name || "Unknown";
+}
+
+interface ProcessTree {
+  parentMap: Map<number, number>;
+  appByPid: Map<number, string>;
+}
+
+let cachedTree: ProcessTree | null = null;
+let lastTreeFetchTime = 0;
+const TREE_CACHE_TTL_MS = 2000;
+
+function getProcessTree(): ProcessTree {
+  const now = Date.now();
+  if (cachedTree && now - lastTreeFetchTime < TREE_CACHE_TTL_MS) {
+    return {
+      parentMap: new Map(cachedTree.parentMap),
+      appByPid: new Map(cachedTree.appByPid),
+    };
+  }
+
+  const parentMap = new Map<number, number>();
+  const appByPid = new Map<number, string>();
+
+  try {
+    const stdout = execSync("ps -axo pid,ppid,comm", {
+      encoding: "utf-8",
+      timeout: 1500,
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+
+    const lines = stdout.split("\n");
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(/\s+/);
+      if (parts.length >= 3) {
+        const pid = parseInt(parts[0], 10);
+        const ppid = parseInt(parts[1], 10);
+        const comm = parts.slice(2).join(" ");
+        if (!isNaN(pid) && !isNaN(ppid)) {
+          parentMap.set(pid, ppid);
+          const appName = extractAppNameFromPath(comm);
+          if (appName) {
+            appByPid.set(pid, appName);
+          }
+        }
+      }
+    }
+  } catch {
+    // If ps command fails, fall back to process paths
+  }
+
+  cachedTree = { parentMap, appByPid };
+  lastTreeFetchTime = now;
+  return {
+    parentMap: new Map(parentMap),
+    appByPid: new Map(appByPid),
+  };
+}
+
+function resolveAppName(
+  row: { pid: number; name: string; executable_path?: string | null },
+  appByPid: Map<number, string>,
+  parentMap: Map<number, number>,
+): string {
+  // 1. Direct app match from executable path
+  const directApp = extractAppNameFromPath(row.executable_path);
+  if (directApp) {
+    appByPid.set(row.pid, directApp);
+    return directApp;
+  }
+
+  // 2. Direct app match from ps comm already in appByPid
+  const psApp = appByPid.get(row.pid);
+  if (psApp) {
+    return psApp;
+  }
+
+  // 3. Walk parent process ancestry to inherit parent app identity
+  let currentPid = row.pid;
+  const visited = new Set<number>([currentPid]);
+  while (true) {
+    const parentPid = parentMap.get(currentPid);
+    if (!parentPid || parentPid <= 1 || visited.has(parentPid)) {
+      break;
+    }
+    visited.add(parentPid);
+
+    const ancestorApp = appByPid.get(parentPid);
+    if (ancestorApp) {
+      appByPid.set(row.pid, ancestorApp);
+      return ancestorApp;
+    }
+    currentPid = parentPid;
+  }
+
+  // 4. Special cases: WebKit subsystem
+  if (row.executable_path && row.executable_path.includes("WebKit")) {
+    appByPid.set(row.pid, "Safari / WebKit");
+    return "Safari / WebKit";
+  }
+
+  // 5. De-truncate kernel names (16 chars) using executable_path
+  const resolved = resolveProcessName(row.name, row.executable_path);
+  appByPid.set(row.pid, resolved);
+  return resolved;
+}
+
+interface RawActiveProcessRow {
+  process_id: number;
+  pid: number;
+  name: string;
   executable_path: string | null;
   bundle_id: string | null;
+  architecture: string | null;
+  is_translated: number | null;
+  phys_footprint: number;
+  cpu_percent: number;
+  gpu_percent: number;
+  disk_read: number;
+  disk_written: number;
+  energy_impact: number;
+}
+
+async function getRawActiveProcesses(): Promise<RawActiveProcessRow[]> {
+  const sql = `
+    WITH latest_sample AS (
+      SELECT MAX(timestamp) AS max_ts FROM process_samples
+    ),
+    latest_per_proc AS (
+      SELECT process_id, MAX(timestamp) AS max_ts
+      FROM process_samples, latest_sample
+      WHERE timestamp >= (max_ts - 60)
+      GROUP BY process_id
+    )
+    SELECT 
+      p.id AS process_id,
+      p.pid,
+      p.name,
+      p.executable_path,
+      p.bundle_id,
+      p.architecture,
+      p.is_translated,
+      ps.phys_footprint,
+      ps.cpu_percent,
+      ps.gpu_percent,
+      ps.disk_read,
+      ps.disk_written,
+      ps.energy_impact
+    FROM latest_per_proc l
+    JOIN process_samples ps ON ps.process_id = l.process_id AND ps.timestamp = l.max_ts
+    JOIN processes p ON ps.process_id = p.id;
+  `;
+
+  return querySqlite<RawActiveProcessRow>(sql);
+}
+
+interface MutableAppGroup {
+  appName: string;
+  processCount: number;
+  memoryBytes: number;
+  cpuPercent: number;
+  gpuPercent: number;
+  diskReadBytes: number;
+  diskWrittenBytes: number;
+  energyImpact: number;
+  primaryPid: number;
+  executablePath: string | null;
+  bundleId: string | null;
+  hasAppBundleMatch: boolean;
+  minPid: number;
 }
 
 export type SortMetric = "memory" | "cpu" | "gpu" | "disk" | "energy";
 
 export async function getGroupedApps(sortBy: SortMetric = "memory", limit = 40): Promise<AppGroup[]> {
-  let orderClause = "memory_bytes DESC";
-  switch (sortBy) {
-    case "memory":
-      orderClause = "memory_bytes DESC";
-      break;
-    case "cpu":
-      orderClause = "cpu_percent DESC";
-      break;
-    case "gpu":
-      orderClause = "gpu_percent DESC";
-      break;
-    case "disk":
-      orderClause = "(disk_read_bytes + disk_written_bytes) DESC";
-      break;
-    case "energy":
-      orderClause = "energy_impact DESC";
-      break;
+  const rows = await getRawActiveProcesses();
+  const { parentMap, appByPid } = getProcessTree();
+
+  // Seed appByPid with direct app bundle paths from active database processes
+  for (const row of rows) {
+    const directApp = extractAppNameFromPath(row.executable_path);
+    if (directApp) {
+      appByPid.set(row.pid, directApp);
+    }
   }
 
-  const sql = `
-    WITH latest_time AS (
-      SELECT max(timestamp) AS ts FROM process_samples
-    ),
-    app_classified AS (
-      SELECT 
-        CASE 
-          WHEN instr(p.executable_path, '.app/') > 0 THEN 
-            replace(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), rtrim(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), replace(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), '/', '')), '')
-          ELSE p.name
-        END AS app_name,
-        p.id AS process_id,
-        p.pid,
-        p.executable_path,
-        p.bundle_id,
-        ps.phys_footprint,
-        ps.cpu_percent,
-        ps.gpu_percent,
-        ps.disk_read,
-        ps.disk_written,
-        ps.energy_impact
-      FROM process_samples ps
-      JOIN processes p ON ps.process_id = p.id
-      WHERE ps.timestamp = (SELECT ts FROM latest_time)
-    )
-    SELECT 
-      app_name,
-      count(*) AS process_count,
-      sum(phys_footprint) AS memory_bytes,
-      round(sum(cpu_percent), 1) AS cpu_percent,
-      round(sum(gpu_percent), 1) AS gpu_percent,
-      sum(disk_read) AS disk_read_bytes,
-      sum(disk_written) AS disk_written_bytes,
-      round(sum(energy_impact), 1) AS energy_impact,
-      min(pid) AS primary_pid,
-      max(executable_path) AS executable_path,
-      max(bundle_id) AS bundle_id
-    FROM app_classified
-    GROUP BY app_name
-    ORDER BY ${orderClause}
-    LIMIT ${limit};
-  `;
+  const groups = new Map<string, MutableAppGroup>();
 
-  const rows = await querySqlite<RawAppGroupRow>(sql);
+  for (const row of rows) {
+    const appName = resolveAppName(row, appByPid, parentMap);
+    let group = groups.get(appName);
 
-  return rows.map((r) => ({
-    appName: r.app_name,
-    processCount: r.process_count,
-    memoryBytes: r.memory_bytes || 0,
-    cpuPercent: r.cpu_percent || 0,
-    gpuPercent: r.gpu_percent || 0,
-    diskReadBytes: r.disk_read_bytes || 0,
-    diskWrittenBytes: r.disk_written_bytes || 0,
-    energyImpact: r.energy_impact || 0,
-    primaryPid: r.primary_pid,
-    executablePath: r.executable_path,
-    bundleId: r.bundle_id,
+    if (!group) {
+      group = {
+        appName,
+        processCount: 0,
+        memoryBytes: 0,
+        cpuPercent: 0,
+        gpuPercent: 0,
+        diskReadBytes: 0,
+        diskWrittenBytes: 0,
+        energyImpact: 0,
+        primaryPid: row.pid,
+        executablePath: row.executable_path,
+        bundleId: row.bundle_id,
+        hasAppBundleMatch: false,
+        minPid: row.pid,
+      };
+      groups.set(appName, group);
+    }
+
+    group.processCount += 1;
+    group.memoryBytes += row.phys_footprint || 0;
+    group.cpuPercent += row.cpu_percent || 0;
+    group.gpuPercent += row.gpu_percent || 0;
+    group.diskReadBytes += row.disk_read || 0;
+    group.diskWrittenBytes += row.disk_written || 0;
+    group.energyImpact += row.energy_impact || 0;
+
+    const isAppBundleMatch = extractAppNameFromPath(row.executable_path) === appName;
+    if (isAppBundleMatch) {
+      if (!group.hasAppBundleMatch || row.pid < group.primaryPid) {
+        group.primaryPid = row.pid;
+        group.executablePath = row.executable_path;
+        group.bundleId = row.bundle_id;
+        group.hasAppBundleMatch = true;
+      }
+    } else if (!group.hasAppBundleMatch) {
+      if (row.pid < group.minPid) {
+        group.minPid = row.pid;
+        group.primaryPid = row.pid;
+        group.executablePath = row.executable_path;
+        group.bundleId = row.bundle_id;
+      }
+    }
+  }
+
+  const result: AppGroup[] = Array.from(groups.values()).map((g) => ({
+    appName: g.appName,
+    processCount: g.processCount,
+    memoryBytes: g.memoryBytes,
+    cpuPercent: Math.round(g.cpuPercent * 10) / 10,
+    gpuPercent: Math.round(g.gpuPercent * 10) / 10,
+    diskReadBytes: g.diskReadBytes,
+    diskWrittenBytes: g.diskWrittenBytes,
+    energyImpact: Math.round(g.energyImpact * 10) / 10,
+    primaryPid: g.primaryPid,
+    executablePath: g.executablePath,
+    bundleId: g.bundleId,
   }));
-}
 
-interface RawSubprocessRow {
-  pid: number;
-  name: string;
-  executable_path: string;
-  memory_bytes: number;
-  cpu_percent: number;
-  gpu_percent: number;
-  disk_read_bytes: number;
-  disk_written_bytes: number;
-  energy_impact: number;
-  architecture: string;
-  is_translated: number;
+  result.sort((a, b) => {
+    switch (sortBy) {
+      case "memory":
+        return b.memoryBytes - a.memoryBytes;
+      case "cpu":
+        return b.cpuPercent - a.cpuPercent;
+      case "gpu":
+        return b.gpuPercent - a.gpuPercent;
+      case "disk":
+        return b.diskReadBytes + b.diskWrittenBytes - (a.diskReadBytes + a.diskWrittenBytes);
+      case "energy":
+        return b.energyImpact - a.energyImpact;
+    }
+  });
+
+  return result.slice(0, limit);
 }
 
 export async function getAppSubprocesses(appName: string): Promise<SubprocessItem[]> {
-  const sql = `
-    WITH latest_time AS (
-      SELECT max(timestamp) AS ts FROM process_samples
-    )
-    SELECT 
-      p.pid,
-      p.name,
-      COALESCE(p.executable_path, '') AS executable_path,
-      COALESCE(p.architecture, 'unknown') AS architecture,
-      COALESCE(p.is_translated, 0) AS is_translated,
-      ps.phys_footprint AS memory_bytes,
-      round(ps.cpu_percent, 1) AS cpu_percent,
-      round(ps.gpu_percent, 1) AS gpu_percent,
-      ps.disk_read AS disk_read_bytes,
-      ps.disk_written AS disk_written_bytes,
-      round(ps.energy_impact, 1) AS energy_impact
-    FROM process_samples ps
-    JOIN processes p ON ps.process_id = p.id
-    WHERE ps.timestamp = (SELECT ts FROM latest_time)
-      AND (
-        (instr(p.executable_path, '.app/') > 0 AND replace(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), rtrim(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), replace(substr(p.executable_path, 1, instr(p.executable_path, '.app/') - 1), '/', '')), '') = '${appName.replace(/'/g, "''")}')
-        OR p.name = '${appName.replace(/'/g, "''")}'
-      )
-    ORDER BY ps.phys_footprint DESC;
-  `;
+  const rows = await getRawActiveProcesses();
+  const { parentMap, appByPid } = getProcessTree();
 
-  const rows = await querySqlite<RawSubprocessRow>(sql);
+  // Seed appByPid with direct app bundle paths from active database processes
+  for (const row of rows) {
+    const directApp = extractAppNameFromPath(row.executable_path);
+    if (directApp) {
+      appByPid.set(row.pid, directApp);
+    }
+  }
 
-  return rows.map((r) => ({
-    pid: r.pid,
-    name: r.name,
-    executablePath: r.executable_path,
-    memoryBytes: r.memory_bytes || 0,
-    cpuPercent: r.cpu_percent || 0,
-    gpuPercent: r.gpu_percent || 0,
-    diskReadBytes: r.disk_read_bytes || 0,
-    diskWrittenBytes: r.disk_written_bytes || 0,
-    energyImpact: r.energy_impact || 0,
-    architecture: r.architecture,
-    isTranslated: r.is_translated === 1,
-  }));
+  const matching: SubprocessItem[] = [];
+
+  for (const row of rows) {
+    const resolvedApp = resolveAppName(row, appByPid, parentMap);
+    if (resolvedApp === appName) {
+      matching.push({
+        pid: row.pid,
+        name: resolveProcessName(row.name, row.executable_path),
+        executablePath: row.executable_path || "",
+        memoryBytes: row.phys_footprint || 0,
+        cpuPercent: Math.round((row.cpu_percent || 0) * 10) / 10,
+        gpuPercent: Math.round((row.gpu_percent || 0) * 10) / 10,
+        diskReadBytes: row.disk_read || 0,
+        diskWrittenBytes: row.disk_written || 0,
+        energyImpact: Math.round((row.energy_impact || 0) * 10) / 10,
+        architecture: row.architecture || "unknown",
+        isTranslated: row.is_translated === 1,
+      });
+    }
+  }
+
+  matching.sort((a, b) => b.memoryBytes - a.memoryBytes);
+  return matching;
 }
 
 interface RawMetaRow {

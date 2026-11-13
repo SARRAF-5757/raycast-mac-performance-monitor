@@ -39,7 +39,12 @@ export default function Command() {
       ]
     : [];
 
-  const compUri = snapshot ? generateStackedBar(slices, totalRam, "Memory Composition Breakdown") : null;
+  const swapSubtitle = snapshot
+    ? `Total ${formatBytes(totalRam)} · Swap: ${formatBytes(snapshot.swapUsed)}`
+    : undefined;
+  const compUri = snapshot
+    ? generateStackedBar(slices, totalRam, "Memory Composition Breakdown", 760, 90, swapSubtitle)
+    : null;
 
   const tick = snapshot?.timestamp ?? Date.now();
   const markdownHeader = `
@@ -114,7 +119,18 @@ ${compUri ? `![Memory Composition Breakdown - ${tick}](${compUri}?raycast-width=
                         title="Compressed RAM"
                         text={formatBytes(snapshot?.compressedRam || 0)}
                       />
-                      <List.Item.Detail.Metadata.Label title="Swap Used" text={formatBytes(snapshot?.swapUsed || 0)} />
+                      <List.Item.Detail.Metadata.TagList title="Swap Memory">
+                        <List.Item.Detail.Metadata.TagList.Item
+                          text={`${formatBytes(snapshot?.swapUsed || 0)} used (${formatBytes(snapshot?.swapTotal || 0)} total)`}
+                          color={
+                            (snapshot?.swapUsed || 0) > 2 * 1024 * 1024 * 1024
+                              ? Color.Red
+                              : (snapshot?.swapUsed || 0) > 512 * 1024 * 1024
+                                ? Color.Orange
+                                : Color.SecondaryText
+                          }
+                        />
+                      </List.Item.Detail.Metadata.TagList>
                       <List.Item.Detail.Metadata.Label title="Free RAM" text={formatBytes(snapshot?.freeRam || 0)} />
                       {app.executablePath ? (
                         <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />

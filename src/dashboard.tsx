@@ -128,7 +128,9 @@ export default function Command() {
           { label: "Cached", value: snapshot.cachedFiles, color: "#5E5CE6" },
           { label: "Free", value: snapshot.freeRam, color: "#30D158" },
         ];
-        return generateStackedBar(slices, totalRam, "Memory Composition Breakdown", 374, 180);
+        const swapSubtitle =
+          snapshot.swapUsed > 0 ? `Swap: ${formatBytes(snapshot.swapUsed)}` : `Total ${formatBytes(totalRam)}`;
+        return generateStackedBar(slices, totalRam, "Memory Composition Breakdown", 374, 180, swapSubtitle);
       }
 
       case "cpu_usage": {

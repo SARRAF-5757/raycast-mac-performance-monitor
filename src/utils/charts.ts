@@ -765,6 +765,7 @@ export function generateStackedBar(
   title: string,
   width = 760,
   height = 90,
+  subtitle?: string,
 ): string {
   const theme = getTheme();
   const isCompact = width <= 400 || height >= 140;
@@ -772,6 +773,7 @@ export function generateStackedBar(
   const barY = isCompact ? 40 : 34;
   const barHeight = isCompact ? 16 : 14;
   const availWidth = width - padding * 2;
+  const displaySubtitle = subtitle ?? `Total ${formatBytes(total)}`;
 
   let currentX = padding;
   const rects: string[] = [];
@@ -831,7 +833,7 @@ export function generateStackedBar(
   <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
   
   <text x="16" y="24" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">${escapeXml(title)}</text>
-  <text x="${width - 16}" y="24" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">Total ${formatBytes(total)}</text>
+  <text x="${width - 16}" y="24" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${escapeXml(displaySubtitle)}</text>
 
   <!-- Segmented Track Background -->
   <clipPath id="${clipId}">
