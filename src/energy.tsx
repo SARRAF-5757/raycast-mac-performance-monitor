@@ -5,7 +5,7 @@ import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateDualAreaChart } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
-import { formatBytes, formatPercent, formatTemp, formatWatts } from "./utils/formatting";
+import { formatPercent } from "./utils/formatting";
 
 export default function Command() {
   const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
@@ -89,40 +89,6 @@ export default function Command() {
                       </List.Item.Detail.Metadata.TagList>
                       <List.Item.Detail.Metadata.Label title="CPU Usage" text={formatPercent(app.cpuPercent)} />
                       <List.Item.Detail.Metadata.Label title="GPU Usage" text={formatPercent(app.gpuPercent)} />
-                      <List.Item.Detail.Metadata.Label title="Memory Footprint" text={formatBytes(app.memoryBytes)} />
-                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      <List.Item.Detail.Metadata.Separator />
-                      <List.Item.Detail.Metadata.Label
-                        title="Power Draw"
-                        text={snapshot?.batteryWatts ? formatWatts(snapshot.batteryWatts) : "AC Power"}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Power Source"
-                        text={
-                          snapshot?.batteryPresent
-                            ? snapshot.batteryCharging
-                              ? "Charging (AC)"
-                              : "Battery"
-                            : "Power Adapter (AC)"
-                        }
-                      />
-                      {snapshot?.batteryPresent ? (
-                        <>
-                          <List.Item.Detail.Metadata.Label
-                            title="Battery Charge"
-                            text={formatPercent(snapshot.batteryCharge)}
-                          />
-                          <List.Item.Detail.Metadata.Label
-                            title="Battery Health"
-                            text={formatPercent(snapshot.batteryHealth)}
-                          />
-                          <List.Item.Detail.Metadata.Label title="Cycle Count" text={String(snapshot.batteryCycles)} />
-                        </>
-                      ) : null}
-                      <List.Item.Detail.Metadata.Label
-                        title="CPU / GPU Temperature"
-                        text={`${formatTemp(snapshot?.cpuDieTemp ?? null)} / ${formatTemp(snapshot?.gpuDieTemp ?? null)}`}
-                      />
                       <List.Item.Detail.Metadata.Label
                         title="Fan Speed"
                         text={snapshot?.fanRpm ? `${snapshot.fanRpm} RPM` : "Silent / Passive"}
@@ -139,8 +105,9 @@ export default function Command() {
                           }
                         />
                       </List.Item.Detail.Metadata.TagList>
+                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
                       {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />
+                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
                       ) : null}
                     </List.Item.Detail.Metadata>
                   }

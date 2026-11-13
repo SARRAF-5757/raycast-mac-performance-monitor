@@ -5,7 +5,7 @@ import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateCoreGrid } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
-import { formatBytes, formatPercent } from "./utils/formatting";
+import { formatPercent } from "./utils/formatting";
 
 export default function Command() {
   const { snapshot, history, range, setRange, cores, apps, isLoading, isInactive } = useLiveStats({
@@ -78,20 +78,8 @@ ${coreGridUri ? `![CPU Cores - ${tick}](${coreGridUri}?raycast-width=760)` : ""}
                         />
                       </List.Item.Detail.Metadata.TagList>
                       <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      <List.Item.Detail.Metadata.Label title="Memory Footprint" text={formatBytes(app.memoryBytes)} />
-                      <List.Item.Detail.Metadata.Label title="GPU Usage" text={formatPercent(app.gpuPercent)} />
-                      <List.Item.Detail.Metadata.Label title="Energy Impact" text={app.energyImpact.toFixed(1)} />
-                      <List.Item.Detail.Metadata.Separator />
-                      <List.Item.Detail.Metadata.Label
-                        title="System CPU Load"
-                        text={formatPercent((snapshot?.cpuLoad || 0) * 100)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Load Averages"
-                        text={`${snapshot?.load1.toFixed(2)} (1m) · ${snapshot?.load5.toFixed(2)} (5m) · ${snapshot?.load15.toFixed(2)} (15m)`}
-                      />
                       {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />
+                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
                       ) : null}
                     </List.Item.Detail.Metadata>
                   }

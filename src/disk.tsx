@@ -6,7 +6,7 @@ import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateDualAreaChart } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
-import { formatBytes, formatIops, formatLatency, formatPercent, formatRate } from "./utils/formatting";
+import { formatBytes } from "./utils/formatting";
 
 export default function Command() {
   const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
@@ -93,7 +93,6 @@ export default function Command() {
                       <List.Item.Detail.Metadata.TagList title="Total Disk I/O">
                         <List.Item.Detail.Metadata.TagList.Item text={formatBytes(totalAppDisk)} color={Color.Blue} />
                       </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Bytes Read" text={formatBytes(app.diskReadBytes)} />
                       <List.Item.Detail.Metadata.Label title="Bytes Written" text={formatBytes(app.diskWrittenBytes)} />
                       <List.Item.Detail.Metadata.TagList title="Workload Category">
                         <List.Item.Detail.Metadata.TagList.Item
@@ -102,31 +101,8 @@ export default function Command() {
                         />
                       </List.Item.Detail.Metadata.TagList>
                       <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      <List.Item.Detail.Metadata.Label title="Memory Footprint" text={formatBytes(app.memoryBytes)} />
-                      <List.Item.Detail.Metadata.Label title="CPU Usage" text={formatPercent(app.cpuPercent)} />
-                      <List.Item.Detail.Metadata.Separator />
-                      <List.Item.Detail.Metadata.Label
-                        title="Live Read Rate"
-                        text={formatRate(snapshot?.diskRead || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Live Write Rate"
-                        text={formatRate(snapshot?.diskWrite || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Read / Write IOPS"
-                        text={`${formatIops(snapshot?.diskReadIops || 0)} / ${formatIops(snapshot?.diskWriteIops || 0)}`}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Latency"
-                        text={`Read: ${formatLatency(snapshot?.diskReadLatency || 0)} · Write: ${formatLatency(snapshot?.diskWriteLatency || 0)}`}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Startup Disk Free"
-                        text={`${formatBytes(snapshot?.bootFree || 0)} of ${formatBytes(snapshot?.bootTotal || 0)}`}
-                      />
                       {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />
+                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
                       ) : null}
                     </List.Item.Detail.Metadata>
                   }

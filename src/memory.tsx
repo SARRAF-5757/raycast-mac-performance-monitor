@@ -5,7 +5,7 @@ import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateStackedBar } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
-import { formatBytes, formatPercent } from "./utils/formatting";
+import { formatBytes } from "./utils/formatting";
 
 export default function Command() {
   const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
@@ -74,93 +74,58 @@ ${compUri ? `![Memory Composition Breakdown - ${tick}](${compUri}?raycast-width=
       }
     >
       <List.Section title={`Active Applications (${apps.length})`}>
-        {apps.map((app) => {
-          const ramShare = totalRam > 0 ? (app.memoryBytes / totalRam) * 100 : 0;
-
-          return (
-            <List.Item
-              key={app.appName}
-              title={app.appName}
-              icon={Icon.MemoryChip}
-              accessories={[
-                { text: formatBytes(app.memoryBytes), tooltip: "Summed RAM across all subprocesses" },
-                { text: `${app.processCount} proc`, tooltip: "Processes in App Coalition" },
-              ]}
-              detail={
-                <List.Item.Detail
-                  markdown={markdownHeader}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
-                      <List.Item.Detail.Metadata.TagList title="Memory Footprint">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={formatBytes(app.memoryBytes)}
-                          color={
-                            app.memoryBytes > 2 * 1024 * 1024 * 1024
-                              ? Color.Red
-                              : app.memoryBytes > 1024 * 1024 * 1024
-                                ? Color.Orange
-                                : Color.Blue
-                          }
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Share of Physical RAM" text={formatPercent(ramShare)} />
-                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      <List.Item.Detail.Metadata.Label title="CPU Usage" text={formatPercent(app.cpuPercent)} />
-                      <List.Item.Detail.Metadata.Label title="Energy Impact" text={app.energyImpact.toFixed(1)} />
-                      <List.Item.Detail.Metadata.Separator />
-                      <List.Item.Detail.Metadata.Label
-                        title="System Memory Pressure"
-                        text={`${formatPercent(snapshot?.pressurePercent || 0)} (${(snapshot?.pressurePercent || 0) >= 67 ? "Critical" : (snapshot?.pressurePercent || 0) >= 34 ? "Warning" : "Nominal"})`}
+        {apps.map((app) => (
+          <List.Item
+            key={app.appName}
+            title={app.appName}
+            icon={Icon.MemoryChip}
+            accessories={[
+              { text: formatBytes(app.memoryBytes), tooltip: "Summed RAM across all subprocesses" },
+              { text: `${app.processCount} proc`, tooltip: "Processes in App Coalition" },
+            ]}
+            detail={
+              <List.Item.Detail
+                markdown={markdownHeader}
+                metadata={
+                  <List.Item.Detail.Metadata>
+                    <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
+                    <List.Item.Detail.Metadata.TagList title="Memory Footprint">
+                      <List.Item.Detail.Metadata.TagList.Item
+                        text={formatBytes(app.memoryBytes)}
+                        color={
+                          app.memoryBytes > 2 * 1024 * 1024 * 1024
+                            ? Color.Red
+                            : app.memoryBytes > 1024 * 1024 * 1024
+                              ? Color.Orange
+                              : Color.Blue
+                        }
                       />
-                      <List.Item.Detail.Metadata.Label title="Total Physical RAM" text={formatBytes(totalRam)} />
-                      <List.Item.Detail.Metadata.Label
-                        title="Active RAM"
-                        text={formatBytes(snapshot?.activeRam || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label title="Wired RAM" text={formatBytes(snapshot?.wiredRam || 0)} />
-                      <List.Item.Detail.Metadata.Label
-                        title="Compressed RAM"
-                        text={formatBytes(snapshot?.compressedRam || 0)}
-                      />
-                      <List.Item.Detail.Metadata.TagList title="Swap Memory">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={`${formatBytes(snapshot?.swapUsed || 0)} used (${formatBytes(snapshot?.swapTotal || 0)} total)`}
-                          color={
-                            (snapshot?.swapUsed || 0) > 2 * 1024 * 1024 * 1024
-                              ? Color.Red
-                              : (snapshot?.swapUsed || 0) > 512 * 1024 * 1024
-                                ? Color.Orange
-                                : Color.SecondaryText
-                          }
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Free RAM" text={formatBytes(snapshot?.freeRam || 0)} />
-                      {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />
-                      ) : null}
-                    </List.Item.Detail.Metadata>
-                  }
+                    </List.Item.Detail.Metadata.TagList>
+                    <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
+                    {app.executablePath ? (
+                      <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
+                    ) : null}
+                  </List.Item.Detail.Metadata>
+                }
+              />
+            }
+            actions={
+              <ActionPanel>
+                <Action.Push
+                  title="Inspect Subprocesses"
+                  icon={Icon.List}
+                  target={<SubprocessList appName={app.appName} />}
                 />
-              }
-              actions={
-                <ActionPanel>
-                  <Action.Push
-                    title="Inspect Subprocesses"
-                    icon={Icon.List}
-                    target={<SubprocessList appName={app.appName} />}
-                  />
-                  <Action
-                    title="Open Mac Performance Monitor"
-                    icon={Icon.AppWindow}
-                    shortcut={Keyboard.Shortcut.Common.Open}
-                    onAction={openApp}
-                  />
-                </ActionPanel>
-              }
-            />
-          );
-        })}
+                <Action
+                  title="Open Mac Performance Monitor"
+                  icon={Icon.AppWindow}
+                  shortcut={Keyboard.Shortcut.Common.Open}
+                  onAction={openApp}
+                />
+              </ActionPanel>
+            }
+          />
+        ))}
       </List.Section>
     </List>
   );

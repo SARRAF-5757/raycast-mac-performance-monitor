@@ -852,3 +852,50 @@ export function generateStackedBar(
 
   return svgToDataUri(svg);
 }
+
+/**
+ * Generates an SVG image for the inactive empty state when Mac Performance Monitor is not running.
+ * Renders an icon centered on top of dimmed, bigger, bolded text, with transparent background.
+ *
+ * @param width Canvas width in pixels (default: 760).
+ * @param height Canvas height in pixels (default: 400).
+ * @returns Base64 SVG data URI.
+ */
+export function generateInactiveSvg(width = 760, height = 400): string {
+  const theme = getTheme();
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  // Icon geometry: 52px wide, 40px tall window with pulse wave
+  const iconW = 52;
+  const iconH = 40;
+  const iconX = centerX - iconW / 2;
+  const iconY = centerY - 44;
+
+  const strokeColor = "#8E8E93";
+  const strokeOpacity = theme.isDark ? 0.5 : 0.45;
+  const textColor = theme.isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.45)";
+
+  const svg = `
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <!-- Window Outline -->
+  <rect x="${iconX}" y="${iconY}" width="${iconW}" height="${iconH}" rx="8" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-opacity="${strokeOpacity}"/>
+
+  <!-- Title bar divider -->
+  <line x1="${iconX}" y1="${iconY + 12}" x2="${iconX + iconW}" y2="${iconY + 12}" stroke="${strokeColor}" stroke-width="1.2" stroke-opacity="${strokeOpacity * 0.7}"/>
+
+  <!-- Window controls -->
+  <circle cx="${iconX + 7}" cy="${iconY + 6}" r="1.5" fill="${strokeColor}" fill-opacity="${strokeOpacity}"/>
+  <circle cx="${iconX + 12}" cy="${iconY + 6}" r="1.5" fill="${strokeColor}" fill-opacity="${strokeOpacity}"/>
+  <circle cx="${iconX + 17}" cy="${iconY + 6}" r="1.5" fill="${strokeColor}" fill-opacity="${strokeOpacity}"/>
+
+  <!-- Activity pulse line -->
+  <path d="M ${iconX + 8} ${iconY + 26} L ${iconX + 18} ${iconY + 26} L ${iconX + 22} ${iconY + 18} L ${iconX + 27} ${iconY + 33} L ${iconX + 31} ${iconY + 22} L ${iconX + 34} ${iconY + 26} L ${iconX + 44} ${iconY + 26}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${strokeOpacity * 1.1}"/>
+
+  <!-- Centered message text: bigger, bolded, and dimmer -->
+  <text x="${centerX}" y="${centerY + 24}" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif" font-size="16" font-weight="600" fill="${textColor}">Mac Performance Monitor isn&apos;t running, open the app to view stats</text>
+</svg>
+  `.trim();
+
+  return svgToDataUri(svg);
+}

@@ -6,7 +6,7 @@ import { TimeRange } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateStackedBar } from "./utils/charts";
 import { openApp } from "./utils/deepLink";
-import { formatBytes, formatPercent, formatTemp, formatWatts } from "./utils/formatting";
+import { formatPercent } from "./utils/formatting";
 
 export default function Command() {
   const { snapshot, history, range, setRange, apps, gpuWorkload, isLoading, isInactive } = useLiveStats({
@@ -115,27 +115,8 @@ ${workloadUri ? `![GPU Usage Breakdown - ${tick}](${workloadUri}?raycast-width=7
                         />
                       </List.Item.Detail.Metadata.TagList>
                       <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      <List.Item.Detail.Metadata.Label title="Memory Footprint" text={formatBytes(app.memoryBytes)} />
-                      <List.Item.Detail.Metadata.Label title="CPU Usage" text={formatPercent(app.cpuPercent)} />
-                      <List.Item.Detail.Metadata.Separator />
-                      <List.Item.Detail.Metadata.Label
-                        title="System GPU Load"
-                        text={formatPercent(snapshot?.gpuUtil || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="GPU Power Draw"
-                        text={formatWatts(snapshot?.gpuPower || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="Neural Engine (ANE) Power"
-                        text={formatWatts(snapshot?.anePower || 0)}
-                      />
-                      <List.Item.Detail.Metadata.Label
-                        title="GPU Temperature"
-                        text={formatTemp(snapshot?.gpuDieTemp ?? null)}
-                      />
                       {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />
+                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
                       ) : null}
                     </List.Item.Detail.Metadata>
                   }
