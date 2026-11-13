@@ -83,7 +83,7 @@ export function getTheme(): ChartTheme {
   if (isDark) {
     return {
       isDark: true,
-      cardBg: "#161618",
+      cardBg: "rgba(0, 0, 0, 0.25)",
       cardBorder: "#28282C",
       cardSubBg: "#1C1C20",
       cardSubBorder: "#2A2A30",
@@ -116,7 +116,7 @@ export function getTheme(): ChartTheme {
 
   return {
     isDark: false,
-    cardBg: "#FFFFFF",
+    cardBg: "rgba(255, 255, 255, 0.25)",
     cardBorder: "#E5E5EA",
     cardSubBg: "#F2F2F7",
     cardSubBorder: "#E5E5EA",
@@ -398,7 +398,7 @@ export function generateTopAppsCard(apps: AppGroup[], width = 760): string {
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-  
+
   <text x="16" y="24" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">Top Active Applications</text>
 
   <!-- Table Header -->
@@ -407,7 +407,7 @@ export function generateTopAppsCard(apps: AppGroup[], width = 760): string {
   <text x="${colMemX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">MEMORY</text>
   <text x="${colGpuX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">GPU</text>
   <text x="${colProcX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" text-anchor="end">PROCESSES</text>
-  
+
   <line x1="16" y1="${headerHeight + 14}" x2="${width - 16}" y2="${headerHeight + 14}" stroke="${theme.gridLine}" stroke-width="1"/>
 
   ${rowNodes.join("\n")}
@@ -748,7 +748,7 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-  
+
   <text x="16" y="22" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">CPU Cores</text>
   <text x="${width - 16}" y="22" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${titleSubtitle}</text>
 
@@ -831,7 +831,7 @@ export function generateStackedBar(
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-  
+
   <text x="16" y="24" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">${escapeXml(title)}</text>
   <text x="${width - 16}" y="24" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${escapeXml(displaySubtitle)}</text>
 

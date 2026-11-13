@@ -163,7 +163,7 @@ export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryP
   const sql = isLongWindow
     ? `
       WITH anchor AS (SELECT max(timestamp) as max_ts FROM system_samples)
-      SELECT 
+      SELECT
         (CAST(timestamp / ${bucketSeconds} AS INT) * ${bucketSeconds}) as timestamp,
         round(avg(cpu_load * 100), 1) as cpu_percent,
         round(avg(pressure_percent), 1) as memory_pressure,
@@ -183,7 +183,7 @@ export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryP
     `
     : `
       WITH anchor AS (SELECT max(timestamp) as max_ts FROM system_samples)
-      SELECT 
+      SELECT
         timestamp,
         round(cpu_load * 100, 1) as cpu_percent,
         round(pressure_percent, 1) as memory_pressure,
@@ -368,7 +368,7 @@ async function getRawActiveProcesses(): Promise<RawActiveProcessRow[]> {
       WHERE timestamp >= (max_ts - 60)
       GROUP BY process_id
     )
-    SELECT 
+    SELECT
       p.id AS process_id,
       p.pid,
       p.name,
