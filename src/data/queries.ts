@@ -409,8 +409,11 @@ interface MutableAppGroup {
 export type SortMetric = "memory" | "cpu" | "gpu" | "disk" | "energy";
 
 export async function getGroupedApps(sortBy: SortMetric = "memory", limit = 40): Promise<AppGroup[]> {
-  const rows = await getRawActiveProcesses();
+  const rawRows = await getRawActiveProcesses();
   const { parentMap, appByPid } = getProcessTree();
+
+  // Filter out terminated processes: only retain processes whose PID is currently alive on macOS
+  const rows = parentMap.size > 0 ? rawRows.filter((r) => parentMap.has(r.pid)) : rawRows;
 
   // Seed appByPid with direct app bundle paths from active database processes
   for (const row of rows) {
@@ -504,8 +507,11 @@ export async function getGroupedApps(sortBy: SortMetric = "memory", limit = 40):
 }
 
 export async function getAppSubprocesses(appName: string): Promise<SubprocessItem[]> {
-  const rows = await getRawActiveProcesses();
+  const rawRows = await getRawActiveProcesses();
   const { parentMap, appByPid } = getProcessTree();
+
+  // Filter out terminated processes: only retain processes whose PID is currently alive on macOS
+  const rows = parentMap.size > 0 ? rawRows.filter((r) => parentMap.has(r.pid)) : rawRows;
 
   // Seed appByPid with direct app bundle paths from active database processes
   for (const row of rows) {
