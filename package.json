@@ -82,6 +82,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -147,6 +151,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -216,6 +224,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -281,6 +293,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -350,6 +366,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -415,6 +435,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -484,6 +508,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -549,6 +577,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -618,6 +650,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -683,6 +719,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -752,6 +792,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -817,6 +861,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",
@@ -886,6 +934,10 @@
               "value": "top_gpu"
             },
             {
+              "title": "Top Disk Users",
+              "value": "top_disk"
+            },
+            {
               "title": "Top Energy Users",
               "value": "top_energy"
             }
@@ -951,6 +1003,10 @@
             {
               "title": "Top GPU Users",
               "value": "top_gpu"
+            },
+            {
+              "title": "Top Disk Users",
+              "value": "top_disk"
             },
             {
               "title": "Top Energy Users",

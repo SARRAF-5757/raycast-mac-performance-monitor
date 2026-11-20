@@ -1,132 +1,127 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List } from "@raycast/api";
+/**
+ * Disk command: read/write throughput history and the apps doing disk I/O right
+ * now. Per-app figures are rates over the recent sampling window, not lifetime totals.
+ */
+
+import { Color, Icon, List } from "@raycast/api";
+import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
-import { SubprocessList } from "./components/SubprocessList";
+import { RangeDropdown } from "./components/RangeDropdown";
 import { classifyProcessWorkload } from "./data/queries";
-import { TimeRange } from "./data/types";
+import { AppGroup, SystemSnapshot } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateDualAreaChart } from "./utils/charts";
-import { openApp } from "./utils/deepLink";
-import { formatBytes } from "./utils/formatting";
+import { formatBytes, formatRate } from "./utils/formatting";
+import { workloadColor, workloadLabel } from "./utils/workload";
+
+const ONE_MB = 1024 * 1024;
+
+/** Red above 50 MB/s, orange above 5 MB/s. */
+function diskTagColor(bytesPerSecond: number): Color {
+  if (bytesPerSecond > 50 * ONE_MB) {
+    return Color.Red;
+  }
+  if (bytesPerSecond > 5 * ONE_MB) {
+    return Color.Orange;
+  }
+  return Color.Blue;
+}
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
-    sortMetric: "disk",
-    appLimit: 40,
-  });
+  const stats = useLiveStats({ sortMetric: "disk" });
+  const snapshot = stats.snapshot;
 
-  if (isLoading && !snapshot) {
-    return <List isLoading={true} searchBarPlaceholder="Loading disk telemetry..." />;
+  if (stats.isLoading && snapshot === null) {
+    return <List isLoading searchBarPlaceholder="Loading disk telemetry..." />;
   }
-
-  if (isInactive) {
+  if (!stats.isAppRunning || snapshot === null) {
     return <InactiveNotice />;
   }
 
-  const readPoints = history.map((h) => h.diskReadMb);
-  const writePoints = history.map((h) => h.diskWriteMb);
-  const diskChartUri = generateDualAreaChart(readPoints, writePoints, {
+  // Only apps with some disk activity are listed.
+  const diskApps = stats.apps.filter((app) => app.diskReadBytes + app.diskWrittenBytes > 0);
+
+  const readValues = stats.history.map((point) => point.diskReadMb);
+  const writeValues = stats.history.map((point) => point.diskWriteMb);
+  const diskChart = generateDualAreaChart(readValues, writeValues, {
     height: 300,
-    title: "Disk Read & Write Records",
-    labelA: "Disk Read",
-    labelB: "Disk Write",
+    title: "Disk Throughput",
+    labelA: "Read",
+    labelB: "Write",
     colorA: "#64D2FF",
     colorB: "#FF9F0A",
     unit: "MB/s",
   });
-
-  const tick = snapshot?.timestamp ?? Date.now();
-  const markdownHeader = `
-![Disk Read & Write Records - ${tick}](${diskChartUri}?raycast-width=760)
-  `.trim();
+  const markdown = "![Disk Throughput - " + snapshot.timestamp + "](" + diskChart + "?raycast-width=760)";
 
   return (
     <List
-      isLoading={isLoading}
+      isLoading={stats.isLoading}
       isShowingDetail
-      searchBarPlaceholder="Filter apps by Disk I/O..."
-      searchBarAccessory={
-        <List.Dropdown tooltip="History Window" value={range} onChange={(newVal) => setRange(newVal as TimeRange)}>
-          <List.Dropdown.Item title="Last 5 Minutes" value="5m" />
-          <List.Dropdown.Item title="Last 15 Minutes" value="15m" />
-          <List.Dropdown.Item title="Last 30 Minutes" value="30m" />
-          <List.Dropdown.Item title="Last 1 Hour" value="1h" />
-          <List.Dropdown.Item title="Last 6 Hours" value="6h" />
-          <List.Dropdown.Item title="Last 24 Hours" value="24h" />
-        </List.Dropdown>
-      }
+      searchBarPlaceholder="Filter apps by name..."
+      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
     >
-      <List.Section title={`Disk Consumer Applications (${apps.length})`}>
-        {apps.map((app) => {
-          const totalAppDisk = app.diskReadBytes + app.diskWrittenBytes;
+      <List.EmptyView
+        icon={Icon.HardDrive}
+        title="No app is reading or writing the disk right now"
+        description={
+          "System: " + formatRate(snapshot.diskRead) + " read, " + formatRate(snapshot.diskWrite) + " write."
+        }
+      />
+      <List.Section title="Applications by Disk Activity" subtitle={String(diskApps.length)}>
+        {diskApps.map((app) => {
+          const total = app.diskReadBytes + app.diskWrittenBytes;
           const category = classifyProcessWorkload(app.appName, app.bundleId, app.executablePath);
-          const categoryLabels: Record<string, string> = {
-            aiMl: "AI & ML",
-            displayUi: "Display & UI",
-            media: "Media",
-            other: "General App",
-          };
-          const categoryColors: Record<string, Color> = {
-            aiMl: Color.Purple,
-            displayUi: Color.Blue,
-            media: Color.Orange,
-            other: Color.SecondaryText,
-          };
-
           return (
             <List.Item
               key={app.appName}
               title={app.appName}
               icon={Icon.HardDrive}
               accessories={[
-                { text: formatBytes(totalAppDisk), tooltip: "Total Read and Written Bytes" },
-                {
-                  tag: { value: categoryLabels[category], color: categoryColors[category] },
-                  tooltip: "Taxonomy Category",
-                },
+                { text: formatRate(total), tooltip: "Read + write rate over the last minute" },
+                { tag: { value: workloadLabel(category), color: workloadColor(category) }, tooltip: "Workload" },
               ]}
-              detail={
-                <List.Item.Detail
-                  markdown={markdownHeader}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
-                      <List.Item.Detail.Metadata.TagList title="Total Disk I/O">
-                        <List.Item.Detail.Metadata.TagList.Item text={formatBytes(totalAppDisk)} color={Color.Blue} />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Bytes Written" text={formatBytes(app.diskWrittenBytes)} />
-                      <List.Item.Detail.Metadata.TagList title="Workload Category">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={categoryLabels[category]}
-                          color={categoryColors[category]}
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
-                      ) : null}
-                    </List.Item.Detail.Metadata>
-                  }
-                />
-              }
-              actions={
-                <ActionPanel>
-                  <Action.Push
-                    title="Inspect Subprocesses"
-                    icon={Icon.List}
-                    target={<SubprocessList appName={app.appName} />}
-                  />
-                  <Action
-                    title="Open Mac Performance Monitor"
-                    icon={Icon.AppWindow}
-                    shortcut={Keyboard.Shortcut.Common.Open}
-                    onAction={openApp}
-                  />
-                </ActionPanel>
-              }
+              detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} snapshot={snapshot} />} />}
+              actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
             />
           );
         })}
       </List.Section>
     </List>
+  );
+}
+
+interface AppMetadataProps {
+  app: AppGroup;
+  snapshot: SystemSnapshot;
+}
+
+function AppMetadata(props: AppMetadataProps) {
+  const app = props.app;
+  const snapshot = props.snapshot;
+  const total = app.diskReadBytes + app.diskWrittenBytes;
+
+  let startupDiskText = "N/A";
+  if (snapshot.bootFree !== null && snapshot.bootTotal !== null) {
+    const freePercent = (snapshot.bootFree / snapshot.bootTotal) * 100;
+    startupDiskText = formatBytes(snapshot.bootFree) + " free (" + freePercent.toFixed(0) + "%)";
+  }
+
+  return (
+    <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.TagList title="Disk Rate">
+        <List.Item.Detail.Metadata.TagList.Item text={formatRate(total)} color={diskTagColor(total)} />
+      </List.Item.Detail.Metadata.TagList>
+      <List.Item.Detail.Metadata.Label title="Reading" text={formatRate(app.diskReadBytes)} />
+      <List.Item.Detail.Metadata.Label title="Writing" text={formatRate(app.diskWrittenBytes)} />
+      <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
+      <List.Item.Detail.Metadata.Separator />
+      <List.Item.Detail.Metadata.Label
+        title="System"
+        text={formatRate(snapshot.diskRead) + " read · " + formatRate(snapshot.diskWrite) + " write"}
+      />
+      <List.Item.Detail.Metadata.Label title="Startup Disk" text={startupDiskText} />
+      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+    </List.Item.Detail.Metadata>
   );
 }

@@ -1,9 +1,6 @@
 import { open } from "@raycast/api";
 
+/** Launches the Mac Performance Monitor app. */
 export async function openApp(): Promise<void> {
-  try {
-    await open("macperfmonitor://open");
-  } catch {
-    await open("/Applications/Mac Performance Monitor.app");
-  }
+  await open("/Applications/Mac Performance Monitor.app");
 }

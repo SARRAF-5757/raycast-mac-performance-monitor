@@ -1,7 +1,22 @@
-import { environment } from "@raycast/api";
-import { AppGroup, CoreUsage, MacTopology, SystemSnapshot } from "../data/types";
-import { formatBytes, formatPercent, formatWatts } from "./formatting";
+/**
+ * Draws every chart and card as an SVG image. Each function builds
+ * SVG markup as a string and returns it as a base64 "data:" URI
+ * that the views embed in Markdown as an image.
+ *
+ * Every card uses the same layout language: a rounded background rectangle,
+ * a title at the top left, and the latest value at the top right.
+ */
 
+import { environment } from "@raycast/api";
+import { CoreUsage } from "../data/types";
+import { formatBytes } from "./formatting";
+
+/**
+ * Sanitizes raw string input for safe embedding within SVG XML text nodes.
+ *
+ * @param unsafe The raw string to escape.
+ * @returns XML-safe string.
+ */
 function escapeXml(unsafe: string): string {
   return unsafe
     .replace(/&/g, "&amp;")
@@ -11,11 +26,24 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, "&apos;");
 }
 
+/**
+ * Encodes an SVG markup string into a base64 data URI suitable for Raycast Markdown images.
+ *
+ * @param svg The raw SVG markup string.
+ * @returns Base64 data URI string (`data:image/svg+xml;base64,...`).
+ */
 function svgToDataUri(svg: string): string {
   const base64 = Buffer.from(svg).toString("base64");
   return `data:image/svg+xml;base64,${base64}`;
 }
 
+/**
+ * Normalizes input that may be either raw SVG markup or a base64 SVG data URI
+ * back into raw SVG markup string.
+ *
+ * @param input Raw SVG string or data URI.
+ * @returns Raw SVG XML string.
+ */
 function normalizeToSvg(input?: string | null): string {
   if (!input) return "";
   if (input.startsWith("data:image/svg+xml;base64,")) {
@@ -25,6 +53,14 @@ function normalizeToSvg(input?: string | null): string {
   return input;
 }
 
+/**
+ * Downsamples an array of numerical data points to at most `maxPoints` using local averaging.
+ * Preserves the final data point to reflect the most recent state accurately.
+ *
+ * @param data Array of numbers to downsample.
+ * @param maxPoints Maximum number of data points desired (default: 60).
+ * @returns Downsampled array of numbers.
+ */
 function downsample(data: number[], maxPoints = 60): number[] {
   if (data.length <= maxPoints) return data;
   const result: number[] = [];
@@ -46,6 +82,36 @@ function downsample(data: number[], maxPoints = 60): number[] {
   return result;
 }
 
+/**
+ * Rounds a chart ceiling up to a "nice" number (1, 2, 5 times a power of ten) so axis
+ * labels read cleanly. Values at or below zero get a ceiling of 1.
+ */
+function niceCeiling(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const normalized = value / magnitude;
+  let step = 10;
+  if (normalized <= 1) {
+    step = 1;
+  } else if (normalized <= 2) {
+    step = 2;
+  } else if (normalized <= 5) {
+    step = 5;
+  }
+  return step * magnitude;
+}
+
+/**
+ * Formats an axis tick: integers as-is, small values with one decimal.
+ */
+function formatAxis(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/**
+ * Theme color tokens and styles for rendering SVG cards and charts.
+ * Supports both dark and light modes matching Raycast appearance.
+ */
 export interface ChartTheme {
   isDark: boolean;
   cardBg: string;
@@ -78,6 +144,12 @@ export interface ChartTheme {
   };
 }
 
+/**
+ * Retrieves the active ChartTheme based on Raycast's current appearance mode (dark or light).
+ * Cards use 85% transparent black in dark mode and 85% transparent white in light mode.
+ *
+ * @returns The active ChartTheme.
+ */
 export function getTheme(): ChartTheme {
   const isDark = environment.appearance === "dark";
   if (isDark) {
@@ -164,12 +236,34 @@ export function adaptColor(color: string, theme: ChartTheme): string {
   return map[upper] || color;
 }
 
+/**
+ * Representation of an active system telemetry warning or threshold violation.
+ */
 export interface WarningPill {
   id: string;
   label: string;
   level: "critical" | "warning" | "caution";
 }
 
+/** Picks the pill colors for a warning level. */
+function pillStyleFor(level: WarningPill["level"], theme: ChartTheme) {
+  if (level === "critical") {
+    return theme.warningPills.critical;
+  }
+  if (level === "caution") {
+    return theme.warningPills.caution;
+  }
+  return theme.warningPills.warning;
+}
+
+/**
+ * Generates an SVG row of rounded status warning pills displayed at the top of the dashboard.
+ * Shows high-priority system alerts (e.g., severe memory pressure, high thermal throttling).
+ *
+ * @param warnings Array of active WarningPills.
+ * @param width Total SVG canvas width (default: 760).
+ * @returns SVG data URI, or null if no warnings are active.
+ */
 export function generateWarningPills(warnings: WarningPill[], width = 760): string | null {
   if (!warnings || warnings.length === 0) return null;
 
@@ -185,12 +279,7 @@ export function generateWarningPills(warnings: WarningPill[], width = 760): stri
     const x = i * (pillWidth + gap);
     const y = 3;
 
-    const pillStyle =
-      w.level === "critical"
-        ? theme.warningPills.critical
-        : w.level === "caution"
-          ? theme.warningPills.caution
-          : theme.warningPills.warning;
+    const pillStyle = pillStyleFor(w.level, theme);
 
     return `
       <g transform="translate(${x}, ${y})">
@@ -210,86 +299,25 @@ export function generateWarningPills(warnings: WarningPill[], width = 760): stri
   return svgToDataUri(svg);
 }
 
-export function generateHeadlineCards(snapshot: SystemSnapshot, topology: MacTopology | null, width = 760): string {
-  const theme = getTheme();
-  const height = 74;
-  const padding = 12;
-  const gap = 10;
-  const cardCount = 4;
-  const cardWidth = Math.floor((width - (cardCount - 1) * gap) / cardCount);
-
-  const cpuPercent = (snapshot.cpuLoad * 100).toFixed(1);
-  const pressureVal = snapshot.pressurePercent.toFixed(1);
-  const pressureLabel =
-    snapshot.pressurePercent >= 67 ? "Critical" : snapshot.pressurePercent >= 34 ? "Warning" : "Nominal";
-  const pressureColor =
-    snapshot.pressurePercent >= 67
-      ? theme.pressureCritical
-      : snapshot.pressurePercent >= 34
-        ? theme.pressureWarning
-        : theme.pressureNominal;
-
-  const totalRam = topology?.memoryBytes || snapshot.totalRam || 1;
-  const activeRamStr = formatBytes(snapshot.activeRam);
-  const totalRamStr = formatBytes(totalRam);
-
-  const powerStr = snapshot.batteryWatts > 0 ? formatWatts(snapshot.batteryWatts) : "AC Outlet";
-  const batterySub = snapshot.batteryPresent ? `${Math.round(snapshot.batteryCharge)}% charge` : "Desktop power";
-
-  const cardsData = [
-    {
-      title: "PROCESSOR",
-      value: `${cpuPercent}%`,
-      sub: `${snapshot.load1.toFixed(2)} 1m load`,
-      color: theme.cpu,
-    },
-    {
-      title: "PRESSURE",
-      value: `${pressureVal}%`,
-      sub: pressureLabel,
-      color: pressureColor,
-    },
-    {
-      title: "ACTIVE MEMORY",
-      value: activeRamStr,
-      sub: `of ${totalRamStr}`,
-      color: theme.memory,
-    },
-    {
-      title: "POWER DRAW",
-      value: powerStr,
-      sub: batterySub,
-      color: theme.power,
-    },
-  ];
-
-  const renderedCards = cardsData.map((c, i) => {
-    const x = i * (cardWidth + gap);
-    return `
-      <g transform="translate(${x}, 0)">
-        <rect width="${cardWidth}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-        <text x="${padding}" y="20" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" letter-spacing="0.5">${c.title}</text>
-        <text x="${padding}" y="44" fill="${theme.textPrimary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" font-weight="700">${c.value}</text>
-        <text x="${padding}" y="62" fill="${c.color}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">${c.sub}</text>
-      </g>
-    `;
-  });
-
-  const svg = `
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-  ${renderedCards.join("\n")}
-</svg>
-  `.trim();
-
-  return svgToDataUri(svg);
-}
-
+/**
+ * Single item row in a mini leaderboard card.
+ */
 export interface LeaderboardItem {
   name: string;
   value: string;
   color?: string;
 }
 
+/**
+ * Generates a compact 5-row leaderboard card suitable for side-by-side dashboard placement.
+ *
+ * @param title Header title for the leaderboard (e.g., "Top Memory Consumers").
+ * @param items Array of ranked items.
+ * @param accentColor Accent color for rank numbers and values.
+ * @param width Card width in pixels (default: 374).
+ * @param height Card height in pixels (default: 180).
+ * @returns Base64 SVG data URI.
+ */
 export function generateMiniLeaderboardCard(
   title: string,
   items: LeaderboardItem[],
@@ -337,6 +365,16 @@ export function generateMiniLeaderboardCard(
   return svgToDataUri(svg);
 }
 
+/**
+ * Combines two half-width card SVGs side by side into a single full-width dashboard row SVG.
+ * Ensures consistent alignment across Raycast Markdown image rendering.
+ *
+ * @param card1Input SVG data URI or markup for the left card.
+ * @param card2Input Optional SVG data URI or markup for the right card.
+ * @param width Row width in pixels (default: 760).
+ * @param height Row height in pixels (default: 180).
+ * @returns Combined base64 SVG data URI.
+ */
 export function renderCardRow(card1Input: string, card2Input?: string | null, width = 760, height = 180): string {
   const svg1 = normalizeToSvg(card1Input);
   const svg2 = normalizeToSvg(card2Input);
@@ -364,59 +402,14 @@ function card2Svg(clean2: string, card2X: number): string {
   return `<g transform="translate(${card2X}, 0)">\n    ${clean2}\n  </g>`;
 }
 
-export function generateTopAppsCard(apps: AppGroup[], width = 760): string {
-  const theme = getTheme();
-  const visibleApps = apps.slice(0, 6);
-  const rowHeight = 28;
-  const headerHeight = 36;
-  const tableHeaderY = 60;
-  const height = tableHeaderY + visibleApps.length * rowHeight + 12;
-
-  const colAppX = 16;
-  const colCpuX = Math.floor(width * 0.44);
-  const colMemX = Math.floor(width * 0.62);
-  const colGpuX = Math.floor(width * 0.78);
-  const colProcX = width - 20;
-
-  const rowNodes = visibleApps.map((app, i) => {
-    const y = tableHeaderY + i * rowHeight + 18;
-    const isEven = i % 2 === 0;
-    const bgRect = isEven
-      ? `<rect x="10" y="${y - 14}" width="${width - 20}" height="${rowHeight}" rx="4" fill="${theme.cardSubBg}" opacity="${theme.isDark ? 0.4 : 1.0}"/>`
-      : "";
-
-    return `
-      ${bgRect}
-      <text x="${colAppX}" y="${y}" fill="${theme.textPrimary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(app.appName)}</text>
-      <text x="${colCpuX}" y="${y}" fill="${theme.cpu}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${formatPercent(app.cpuPercent)}</text>
-      <text x="${colMemX}" y="${y}" fill="${theme.memory}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12">${formatBytes(app.memoryBytes)}</text>
-      <text x="${colGpuX}" y="${y}" fill="${theme.gpu}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12">${formatPercent(app.gpuPercent)}</text>
-      <text x="${colProcX}" y="${y}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" text-anchor="end">${app.processCount}</text>
-    `;
-  });
-
-  const svg = `
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-
-  <text x="16" y="24" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">Top Active Applications</text>
-
-  <!-- Table Header -->
-  <text x="${colAppX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">APPLICATION</text>
-  <text x="${colCpuX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">CPU</text>
-  <text x="${colMemX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">MEMORY</text>
-  <text x="${colGpuX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">GPU</text>
-  <text x="${colProcX}" y="${headerHeight + 8}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" text-anchor="end">PROCESSES</text>
-
-  <line x1="16" y1="${headerHeight + 14}" x2="${width - 16}" y2="${headerHeight + 14}" stroke="${theme.gridLine}" stroke-width="1"/>
-
-  ${rowNodes.join("\n")}
-</svg>
-  `.trim();
-
-  return svgToDataUri(svg);
-}
-
+/**
+ * Generates a single-series area chart card with smooth Bézier curvature, vertical gradient fill,
+ * reference grid guidelines, axis labels, and latest value badge.
+ *
+ * @param data Array of historical value points.
+ * @param options Chart layout configuration (dimensions, color, label, unit, scale).
+ * @returns Base64 SVG data URI.
+ */
 export function generateAreaChart(
   data: number[],
   options: {
@@ -437,6 +430,7 @@ export function generateAreaChart(
   const label = options.label || "";
   const unit = options.unit || "%";
 
+  // Compact cards are the half-width dashboard cards; they get tighter padding and smaller text.
   const isCompact = width <= 400;
   const paddingLeft = isCompact ? 46 : 50;
   const paddingRight = 16;
@@ -449,9 +443,8 @@ export function generateAreaChart(
   const rawPoints = data.length > 0 ? data : [0, 0];
   const points = downsample(rawPoints, 60);
 
-  const maxData = Math.max(...points, 1);
-  const max =
-    options.maxValue !== undefined ? Math.max(options.maxValue, maxData) : Math.max(100, Math.ceil(maxData / 10) * 10);
+  const maxData = Math.max(...points, 0);
+  const max = options.maxValue !== undefined ? Math.max(options.maxValue, maxData) : niceCeiling(maxData * 1.15);
   const latest = rawPoints[rawPoints.length - 1];
 
   // Coordinates
@@ -503,8 +496,8 @@ export function generateAreaChart(
   <line x1="${paddingLeft}" y1="${y0}" x2="${width - paddingRight}" y2="${y0}" stroke="${theme.gridLineBase}" stroke-width="1"/>
 
   <!-- Y-Axis Labels -->
-  <text x="${paddingLeft - 8}" y="${y100 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${max}${unit}</text>
-  <text x="${paddingLeft - 8}" y="${y50 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${Math.round(max / 2)}${unit}</text>
+  <text x="${paddingLeft - 8}" y="${y100 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${formatAxis(max)}${unit}</text>
+  <text x="${paddingLeft - 8}" y="${y50 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${formatAxis(max / 2)}${unit}</text>
   <text x="${paddingLeft - 8}" y="${y0 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">0${unit}</text>
 
   <!-- Area Fill -->
@@ -525,6 +518,15 @@ export function generateAreaChart(
   return svgToDataUri(svg);
 }
 
+/**
+ * Generates a dual-series area chart card comparing two time-series curves simultaneously
+ * (e.g., Disk Read vs. Disk Write, or Network In vs. Network Out).
+ *
+ * @param dataA Data points for series A.
+ * @param dataB Data points for series B.
+ * @param options Styling and labeling options for both series.
+ * @returns Base64 SVG data URI.
+ */
 export function generateDualAreaChart(
   dataA: number[],
   dataB: number[],
@@ -559,8 +561,7 @@ export function generateDualAreaChart(
   const ptsB = downsample(rawB, 60);
   const count = Math.max(ptsA.length, ptsB.length);
 
-  const maxVal = Math.max(...ptsA, ...ptsB, 1);
-  const max = Math.ceil(maxVal * 1.15);
+  const max = niceCeiling(Math.max(...ptsA, ...ptsB, 0) * 1.15);
 
   const stepX = count > 1 ? chartWidth / (count - 1) : chartWidth;
 
@@ -621,23 +622,27 @@ export function generateDualAreaChart(
       <text x="340" y="23" fill="${colorB}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700">${latestB.toFixed(1)} ${unit}</text>
     `;
 
-  const headerContent = options.title
-    ? isCompact
-      ? `
+  // The header is either a title with the two latest values, or (without a title) two legends.
+  let headerContent: string;
+  if (options.title && isCompact) {
+    headerContent = `
         <text x="16" y="24" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.title)}</text>
         <circle cx="${width - 132}" cy="20" r="3.5" fill="${colorA}"/>
         <text x="${width - 124}" y="24" fill="${colorA}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">${latestA.toFixed(1)}</text>
         <circle cx="${width - 70}" cy="20" r="3.5" fill="${colorB}"/>
         <text x="${width - 62}" y="24" fill="${colorB}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">${latestB.toFixed(1)}${unit}</text>
-      `
-      : `
+      `;
+  } else if (options.title) {
+    headerContent = `
         <text x="16" y="23" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">${escapeXml(options.title)}</text>
         <circle cx="${width - 310}" cy="19" r="4" fill="${colorA}"/>
         <text x="${width - 300}" y="23" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.labelA)}: <tspan fill="${colorA}" font-weight="700">${latestA.toFixed(1)} ${unit}</tspan></text>
         <circle cx="${width - 150}" cy="19" r="4" fill="${colorB}"/>
         <text x="${width - 140}" y="23" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="600">${escapeXml(options.labelB)}: <tspan fill="${colorB}" font-weight="700">${latestB.toFixed(1)} ${unit}</tspan></text>
-      `
-    : `${legendA}\n  ${legendB}`;
+      `;
+  } else {
+    headerContent = `${legendA}\n  ${legendB}`;
+  }
 
   const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -658,8 +663,8 @@ export function generateDualAreaChart(
   <line x1="${paddingLeft}" y1="${y50}" x2="${width - paddingRight}" y2="${y50}" stroke="${theme.gridLine}" stroke-width="1" stroke-dasharray="3,3"/>
   <line x1="${paddingLeft}" y1="${y0}" x2="${width - paddingRight}" y2="${y0}" stroke="${theme.gridLineBase}" stroke-width="1"/>
 
-  <text x="${paddingLeft - 8}" y="${y100 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${max}${unit}</text>
-  <text x="${paddingLeft - 8}" y="${y50 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${(max / 2).toFixed(0)}</text>
+  <text x="${paddingLeft - 8}" y="${y100 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${formatAxis(max)}${unit}</text>
+  <text x="${paddingLeft - 8}" y="${y50 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">${formatAxis(max / 2)}</text>
   <text x="${paddingLeft - 8}" y="${y0 + 4}" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" text-anchor="end">0</text>
 
   <!-- Curve A -->
@@ -680,6 +685,15 @@ export function generateDualAreaChart(
   return svgToDataUri(svg);
 }
 
+/**
+ * Generates an interactive-style CPU core usage grid displaying per-core progress bars
+ * and utilization percentages, grouped by Performance (P) and Efficiency (E) core clusters.
+ *
+ * @param cores Array of sampled CoreUsage items.
+ * @param width Card width in pixels (default: 760).
+ * @param height Card height in pixels (default: 180).
+ * @returns Base64 SVG data URI.
+ */
 export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180): string {
   const theme = getTheme();
   const pCores = cores.filter((c) => c.kind === "performance");
@@ -702,12 +716,12 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
     const color = isP ? theme.cpu : theme.gpu;
     const labelPrefix = isP ? "P" : "E";
 
-    // Cluster-relative numbering (P0..P3, E0..E3)
-    const clusterIndex = isP
-      ? eCores.length > 0 && core.index >= eCores.length
-        ? core.index - eCores.length
-        : core.index
-      : core.index;
+    // Number cores within their cluster (P0..P3, E0..E3). E-cores come first in
+    // the kernel's numbering, so a P-core's cluster index is offset by the E-core count.
+    let clusterIndex = core.index;
+    if (isP && eCores.length > 0 && core.index >= eCores.length) {
+      clusterIndex = core.index - eCores.length;
+    }
     const coreLabel = `${labelPrefix}${clusterIndex}`;
     const fillWidth = Math.max(3, Math.round(((colWidth - (isCompact ? 12 : 16)) * core.usage) / 100));
 
@@ -759,6 +773,18 @@ export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180):
   return svgToDataUri(svg);
 }
 
+/**
+ * Generates a proportional multi-colored stacked progress bar card with legend breakdowns.
+ * Used for Memory Composition (App, Wired, Compressed, Cached, Free) and Disk/GPU workload slices.
+ *
+ * @param slices Array of proportioned segment definitions with labels and colors.
+ * @param total Total quantity representing 100% width.
+ * @param title Header title for the card.
+ * @param width Card width in pixels (default: 760).
+ * @param height Card height in pixels (default: 90).
+ * @param subtitle Optional right-aligned header subtitle (e.g., active swap info).
+ * @returns Base64 SVG data URI.
+ */
 export function generateStackedBar(
   slices: { label: string; value: number; color: string; formatted?: string }[],
   total: number,
@@ -773,7 +799,10 @@ export function generateStackedBar(
   const barY = isCompact ? 40 : 34;
   const barHeight = isCompact ? 16 : 14;
   const availWidth = width - padding * 2;
-  const displaySubtitle = subtitle ?? `Total ${formatBytes(total)}`;
+  let displaySubtitle = subtitle;
+  if (displaySubtitle === undefined) {
+    displaySubtitle = `Total ${formatBytes(total)}`;
+  }
 
   let currentX = padding;
   const rects: string[] = [];
@@ -854,14 +883,14 @@ export function generateStackedBar(
 }
 
 /**
- * Generates an SVG image for the inactive empty state when Mac Performance Monitor is not running.
- * Renders an icon centered on top of dimmed, bigger, bolded text, with transparent background.
+ * Generates the empty-state image shown when there is no live data to display:
  *
+ * @param message Text shown under the icon.
  * @param width Canvas width in pixels (default: 760).
  * @param height Canvas height in pixels (default: 400).
  * @returns Base64 SVG data URI.
  */
-export function generateInactiveSvg(width = 760, height = 400): string {
+export function generateInactiveSvg(message: string, width = 760, height = 400): string {
   const theme = getTheme();
   const centerX = width / 2;
   const centerY = height / 2;
@@ -893,7 +922,7 @@ export function generateInactiveSvg(width = 760, height = 400): string {
   <path d="M ${iconX + 8} ${iconY + 26} L ${iconX + 18} ${iconY + 26} L ${iconX + 22} ${iconY + 18} L ${iconX + 27} ${iconY + 33} L ${iconX + 31} ${iconY + 22} L ${iconX + 34} ${iconY + 26} L ${iconX + 44} ${iconY + 26}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${strokeOpacity * 1.1}"/>
 
   <!-- Centered message text: bigger, bolded, and dimmer -->
-  <text x="${centerX}" y="${centerY + 24}" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif" font-size="16" font-weight="600" fill="${textColor}">Mac Performance Monitor isn&apos;t running, open the app to view stats</text>
+  <text x="${centerX}" y="${centerY + 24}" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif" font-size="16" font-weight="600" fill="${textColor}">${escapeXml(message)}</text>
 </svg>
   `.trim();
 

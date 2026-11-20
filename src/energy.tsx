@@ -1,36 +1,55 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List } from "@raycast/api";
+/**
+ * Energy command: system power draw and die temperatures over time, battery and
+ * thermal state, and every running app sorted by energy impact.
+ */
+
+import { Color, Icon, List } from "@raycast/api";
+import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
-import { SubprocessList } from "./components/SubprocessList";
-import { TimeRange } from "./data/types";
+import { RangeDropdown } from "./components/RangeDropdown";
+import { AppGroup, SystemSnapshot } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateDualAreaChart } from "./utils/charts";
-import { openApp } from "./utils/deepLink";
-import { formatPercent } from "./utils/formatting";
+import { formatPercent, formatTemp, formatWatts } from "./utils/formatting";
+
+/** Energy impact uses Activity Monitor's scale: red above 25, orange above 10. */
+function energyTagColor(energyImpact: number): Color {
+  if (energyImpact > 25) {
+    return Color.Red;
+  }
+  if (energyImpact > 10) {
+    return Color.Orange;
+  }
+  return Color.Yellow;
+}
+
+function thermalTagColor(thermalState: string): Color {
+  if (thermalState === "critical") {
+    return Color.Red;
+  }
+  if (thermalState === "serious") {
+    return Color.Orange;
+  }
+  return Color.Green;
+}
 
 export default function Command() {
-  const { snapshot, history, range, setRange, apps, isLoading, isInactive } = useLiveStats({
-    sortMetric: "energy",
-    appLimit: 40,
-  });
+  const stats = useLiveStats({ sortMetric: "energy" });
+  const snapshot = stats.snapshot;
 
-  if (isLoading && !snapshot) {
-    return <List isLoading={true} searchBarPlaceholder="Loading energy telemetry..." />;
+  if (stats.isLoading && snapshot === null) {
+    return <List isLoading searchBarPlaceholder="Loading energy telemetry..." />;
   }
-
-  if (isInactive) {
+  if (!stats.isAppRunning || snapshot === null) {
     return <InactiveNotice />;
   }
 
-  const powerPoints = history.map((h) => h.batteryWatts);
-  const powerChartUri = generateAreaChart(powerPoints, {
-    label: "Power Consumption",
-    color: "#FFD60A",
-    unit: "W",
-  });
+  const powerValues = stats.history.map((point) => point.powerWatts);
+  const powerChart = generateAreaChart(powerValues, { label: "Power Draw", color: "#FFD60A", unit: "W" });
 
-  const cpuTemps = history.map((h) => h.cpuTemp || 0);
-  const gpuTemps = history.map((h) => h.gpuTemp || 0);
-  const thermalChartUri = generateDualAreaChart(cpuTemps, gpuTemps, {
+  const cpuTemps = stats.history.map((point) => point.cpuTemp);
+  const gpuTemps = stats.history.map((point) => point.gpuTemp);
+  const thermalChart = generateDualAreaChart(cpuTemps, gpuTemps, {
     title: "Thermals",
     labelA: "CPU Die",
     labelB: "GPU Die",
@@ -39,99 +58,95 @@ export default function Command() {
     unit: "°C",
   });
 
-  const tick = snapshot?.timestamp ?? Date.now();
-  const markdownHeader = `
-![Power Consumption - ${tick}](${powerChartUri}?raycast-width=760)
-
-![Thermals - ${tick}](${thermalChartUri}?raycast-width=760)
-  `.trim();
+  const tick = snapshot.timestamp;
+  const markdown =
+    "![Power Draw - " +
+    tick +
+    "](" +
+    powerChart +
+    "?raycast-width=760)\n\n" +
+    "![Thermals - " +
+    tick +
+    "](" +
+    thermalChart +
+    "?raycast-width=760)";
 
   return (
     <List
-      isLoading={isLoading}
+      isLoading={stats.isLoading}
       isShowingDetail
-      searchBarPlaceholder="Filter apps by Energy Impact..."
-      searchBarAccessory={
-        <List.Dropdown tooltip="History Window" value={range} onChange={(newVal) => setRange(newVal as TimeRange)}>
-          <List.Dropdown.Item title="Last 5 Minutes" value="5m" />
-          <List.Dropdown.Item title="Last 15 Minutes" value="15m" />
-          <List.Dropdown.Item title="Last 30 Minutes" value="30m" />
-          <List.Dropdown.Item title="Last 1 Hour" value="1h" />
-          <List.Dropdown.Item title="Last 6 Hours" value="6h" />
-          <List.Dropdown.Item title="Last 24 Hours" value="24h" />
-        </List.Dropdown>
-      }
+      searchBarPlaceholder="Filter apps by name..."
+      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
     >
-      <List.Section title={`Energy Intensive Applications (${apps.length})`}>
-        {apps.map((app) => {
-          return (
-            <List.Item
-              key={app.appName}
-              title={app.appName}
-              icon={Icon.Bolt}
-              accessories={[
-                { text: `${app.energyImpact.toFixed(1)} Impact`, tooltip: "Energy Impact Score" },
-                { text: `${app.processCount} proc`, tooltip: "Processes in App Coalition" },
-              ]}
-              detail={
-                <List.Item.Detail
-                  markdown={markdownHeader}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
-                      <List.Item.Detail.Metadata.TagList title="Energy Impact">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={app.energyImpact.toFixed(1)}
-                          color={
-                            app.energyImpact > 25 ? Color.Red : app.energyImpact > 10 ? Color.Orange : Color.Yellow
-                          }
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="CPU Usage" text={formatPercent(app.cpuPercent)} />
-                      <List.Item.Detail.Metadata.Label title="GPU Usage" text={formatPercent(app.gpuPercent)} />
-                      <List.Item.Detail.Metadata.Label
-                        title="Fan Speed"
-                        text={snapshot?.fanRpm ? `${snapshot.fanRpm} RPM` : "Silent / Passive"}
-                      />
-                      <List.Item.Detail.Metadata.TagList title="Thermal State">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={snapshot?.thermalState || "nominal"}
-                          color={
-                            snapshot?.thermalState === "critical"
-                              ? Color.Red
-                              : snapshot?.thermalState === "serious"
-                                ? Color.Orange
-                                : Color.Green
-                          }
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
-                      ) : null}
-                    </List.Item.Detail.Metadata>
-                  }
-                />
-              }
-              actions={
-                <ActionPanel>
-                  <Action.Push
-                    title="Inspect Subprocesses"
-                    icon={Icon.List}
-                    target={<SubprocessList appName={app.appName} />}
-                  />
-                  <Action
-                    title="Open Mac Performance Monitor"
-                    icon={Icon.AppWindow}
-                    shortcut={Keyboard.Shortcut.Common.Open}
-                    onAction={openApp}
-                  />
-                </ActionPanel>
-              }
-            />
-          );
-        })}
+      <List.Section title="Applications by Energy Impact" subtitle={String(stats.apps.length)}>
+        {stats.apps.map((app) => (
+          <List.Item
+            key={app.appName}
+            title={app.appName}
+            icon={Icon.Bolt}
+            accessories={[
+              { text: app.energyImpact.toFixed(1), tooltip: "Energy impact (Activity Monitor scale)" },
+              { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
+            ]}
+            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} snapshot={snapshot} />} />}
+            actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
+          />
+        ))}
       </List.Section>
     </List>
+  );
+}
+
+interface AppMetadataProps {
+  app: AppGroup;
+  snapshot: SystemSnapshot;
+}
+
+function AppMetadata(props: AppMetadataProps) {
+  const app = props.app;
+  const snapshot = props.snapshot;
+
+  let batteryText = "No battery";
+  if (snapshot.batteryPresent) {
+    batteryText = Math.round(snapshot.batteryCharge) + "%";
+    if (snapshot.batteryCharging) {
+      batteryText += " charging";
+    }
+    batteryText += " · health " + Math.round(snapshot.batteryHealth) + "%";
+  }
+
+  // The app records no fan reading on fanless Macs.
+  let fanText = "No fan";
+  if (snapshot.fanRpm !== null) {
+    fanText = Math.round(snapshot.fanRpm) + " RPM";
+  }
+
+  return (
+    <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.TagList title="Energy Impact">
+        <List.Item.Detail.Metadata.TagList.Item
+          text={app.energyImpact.toFixed(1)}
+          color={energyTagColor(app.energyImpact)}
+        />
+      </List.Item.Detail.Metadata.TagList>
+      <List.Item.Detail.Metadata.Label title="CPU" text={formatPercent(app.cpuPercent)} />
+      <List.Item.Detail.Metadata.Label title="GPU" text={formatPercent(app.gpuPercent)} />
+      <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
+      <List.Item.Detail.Metadata.Separator />
+      <List.Item.Detail.Metadata.Label title="System Power" text={formatWatts(snapshot.systemPowerWatts)} />
+      <List.Item.Detail.Metadata.Label title="Battery" text={batteryText} />
+      <List.Item.Detail.Metadata.Label
+        title="Temperatures"
+        text={"CPU " + formatTemp(snapshot.cpuDieTemp) + " · GPU " + formatTemp(snapshot.gpuDieTemp)}
+      />
+      <List.Item.Detail.Metadata.Label title="Fan" text={fanText} />
+      <List.Item.Detail.Metadata.TagList title="Thermal State">
+        <List.Item.Detail.Metadata.TagList.Item
+          text={snapshot.thermalState}
+          color={thermalTagColor(snapshot.thermalState)}
+        />
+      </List.Item.Detail.Metadata.TagList>
+      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+    </List.Item.Detail.Metadata>
   );
 }

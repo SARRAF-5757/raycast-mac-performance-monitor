@@ -1,5 +1,21 @@
-import { execSync } from "child_process";
+/**
+ * Every query the extension runs against the Mac Performance Monitor database,
+ * plus the in-memory steps that turn raw rows into what the views show
+ * (grouping processes into apps, sorting, workload classification).
+ *
+ * Facts about the database that shaped this file:
+ * - Raw per-second rows (`system_samples`, `process_samples`) are kept for about
+ *   two hours. Older history lives in `system_minute` as one-minute averages.
+ * - A process row is written only when its numbers changed, or on a heartbeat
+ *   once per `minute_bucket_seconds` (stored in the `meta` table).
+ * - `disk_read` / `disk_written` per process are lifetime totals, not rates.
+ * - Some columns are nullable: the app writes NULL when a reading was not taken
+ *   (no fan on a fanless Mac, a sensor that was not read on that tick).
+ */
+
+import { execFile } from "child_process";
 import os from "os";
+import { promisify } from "util";
 import { querySqlite } from "./db";
 import {
   AppGroup,
@@ -9,118 +25,121 @@ import {
   SystemHistoryPoint,
   SystemSnapshot,
   TimeRange,
+  WorkloadCategory,
   WorkloadSlices,
 } from "./types";
 
+const execFileAsync = promisify(execFile);
+
+/** Rounds to one decimal place. */
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+// ---------------------------------------------------------------------------
+// Latest system snapshot
+// ---------------------------------------------------------------------------
+
+/** The `system_samples` columns the extension reads, names as in the database. */
 interface RawSystemSample {
   timestamp: number;
   total_ram: number;
   free: number;
-  active: number;
-  inactive: number;
   wired: number;
-  speculative: number;
   compressed: number;
   app_memory: number;
   cached_files: number;
-  swap_total: number;
   swap_used: number;
   pressure_level: number;
   pressure_percent: number;
   cpu_load: number;
-  load_1: number;
-  load_5: number;
-  load_15: number;
-  net_in: number;
-  net_out: number;
+  load_1: number | null;
   disk_read: number;
   disk_write: number;
-  disk_read_iops: number;
-  disk_write_iops: number;
-  disk_read_latency: number;
-  disk_write_latency: number;
-  disk_util: number;
-  boot_free: number;
-  boot_total: number;
-  gpu_util: number;
-  gpu_power: number;
-  ane_power: number;
+  boot_free: number | null;
+  boot_total: number | null;
+  gpu_util: number | null;
+  gpu_power: number | null;
   cpu_die: number | null;
   gpu_die: number | null;
-  ssd_temp: number | null;
   fan_rpm: number | null;
-  thermal_state: number | string | null;
+  thermal_state: number | null;
   battery_present: number;
   battery_charge: number;
-  battery_power: number;
   battery_charging: number;
   battery_health: number;
-  battery_cycles: number;
-  energy_power?: number;
+  energy_power: number | null;
 }
 
-function parseThermalState(state: number | string | null | undefined): string {
-  if (state === 0 || state === "0" || state === "nominal") return "nominal";
-  if (state === 1 || state === "1" || state === "fair") return "fair";
-  if (state === 2 || state === "2" || state === "serious") return "serious";
-  if (state === 3 || state === "3" || state === "critical") return "critical";
-  return "nominal";
+/** Maps the app's thermal state code onto a name. NULL means it was not read. */
+function parseThermalState(code: number | null): string {
+  switch (code) {
+    case 0:
+      return "nominal";
+    case 1:
+      return "fair";
+    case 2:
+      return "serious";
+    case 3:
+      return "critical";
+    default:
+      return "unknown";
+  }
 }
 
+/** Fetches the most recent system sample, or null if the table is empty. */
 export async function getLatestSnapshot(): Promise<SystemSnapshot | null> {
-  const rows = await querySqlite<RawSystemSample>("SELECT * FROM system_samples ORDER BY timestamp DESC LIMIT 1;");
-
-  if (!rows || rows.length === 0) return null;
+  const sql = `
+    SELECT timestamp, total_ram, free, wired, compressed, app_memory, cached_files, swap_used,
+      pressure_level, pressure_percent, cpu_load, load_1, disk_read, disk_write, boot_free, boot_total,
+      gpu_util, gpu_power, cpu_die, gpu_die, fan_rpm, thermal_state,
+      battery_present, battery_charge, battery_charging, battery_health, energy_power
+    FROM system_samples
+    ORDER BY timestamp DESC
+    LIMIT 1;
+  `;
+  const rows = await querySqlite<RawSystemSample>(sql);
+  if (rows.length === 0) {
+    return null;
+  }
   const r = rows[0];
 
   return {
     timestamp: r.timestamp,
-    totalRam: r.total_ram || 0,
-    freeRam: r.free || 0,
-    activeRam: r.active || 0,
-    inactiveRam: r.inactive || 0,
-    wiredRam: r.wired || 0,
-    speculativeRam: r.speculative || 0,
-    compressedRam: r.compressed || 0,
-    appMemory: r.app_memory || 0,
-    cachedFiles: r.cached_files || 0,
-    swapTotal: r.swap_total || 0,
-    swapUsed: r.swap_used || 0,
-    pressureLevel: r.pressure_level || 1,
-    pressurePercent: r.pressure_percent || 0,
-    cpuLoad: r.cpu_load || 0,
-    load1: r.load_1 || 0,
-    load5: r.load_5 || 0,
-    load15: r.load_15 || 0,
-    netIn: r.net_in || 0,
-    netOut: r.net_out || 0,
-    diskRead: r.disk_read || 0,
-    diskWrite: r.disk_write || 0,
-    diskReadIops: r.disk_read_iops || 0,
-    diskWriteIops: r.disk_write_iops || 0,
-    diskReadLatency: r.disk_read_latency || 0,
-    diskWriteLatency: r.disk_write_latency || 0,
-    diskUtil: r.disk_util || 0,
-    bootFree: r.boot_free || 0,
-    bootTotal: r.boot_total || 0,
-    gpuUtil: r.gpu_util || 0,
-    gpuPower: r.gpu_power || 0,
-    anePower: r.ane_power || 0,
-    cpuDieTemp: r.cpu_die ?? null,
-    gpuDieTemp: r.gpu_die ?? null,
-    ssdTemp: r.ssd_temp ?? null,
-    fanRpm: r.fan_rpm ?? null,
+    totalRam: r.total_ram,
+    freeRam: r.free,
+    wiredRam: r.wired,
+    compressedRam: r.compressed,
+    appMemory: r.app_memory,
+    cachedFiles: r.cached_files,
+    swapUsed: r.swap_used,
+    pressureLevel: r.pressure_level,
+    pressurePercent: r.pressure_percent,
+    cpuLoad: r.cpu_load,
+    load1: r.load_1,
+    diskRead: r.disk_read,
+    diskWrite: r.disk_write,
+    bootFree: r.boot_free,
+    bootTotal: r.boot_total,
+    gpuUtil: r.gpu_util,
+    gpuPower: r.gpu_power,
+    cpuDieTemp: r.cpu_die,
+    gpuDieTemp: r.gpu_die,
+    fanRpm: r.fan_rpm,
     thermalState: parseThermalState(r.thermal_state),
     batteryPresent: r.battery_present === 1,
-    batteryCharge: r.battery_charge || 0,
-    batteryWatts: Math.abs(r.battery_power || 0),
+    batteryCharge: r.battery_charge,
     batteryCharging: r.battery_charging === 1,
-    batteryHealth: r.battery_health || 100,
-    batteryCycles: r.battery_cycles || 0,
-    systemPowerWatts: Math.abs(r.energy_power || r.battery_power || 0),
+    batteryHealth: r.battery_health,
+    systemPowerWatts: r.energy_power,
   };
 }
 
+// ---------------------------------------------------------------------------
+// System history (for the charts)
+// ---------------------------------------------------------------------------
+
+/** Converts a time range token like "15m" or "6h" into seconds. */
 export function rangeToSeconds(range: TimeRange): number {
   switch (range) {
     case "5m":
@@ -138,509 +157,609 @@ export function rangeToSeconds(range: TimeRange): number {
   }
 }
 
+/** How many points a history query aims for. The charts downsample further to 60. */
+const HISTORY_TARGET_POINTS = 120;
+
+/** One row of the history query below. The nullable columns can average to NULL. */
 interface RawHistoryRow {
-  timestamp: number;
+  bucket: number;
   cpu_percent: number;
   memory_pressure: number;
-  gpu_percent: number;
+  gpu_percent: number | null;
   disk_read_mb: number;
   disk_write_mb: number;
-  net_in_kb: number;
-  net_out_kb: number;
   cpu_temp: number | null;
   gpu_temp: number | null;
-  battery_watts: number;
-  battery_percent: number;
+  power_watts: number | null;
 }
 
+/**
+ * A chart line needs a number for every point. A missing reading is drawn at 0,
+ * so a gap in the recording shows up on the chart as a drop.
+ */
+function missingAsZero(value: number | null): number {
+  if (value === null) {
+    return 0;
+  }
+  return value;
+}
+
+/**
+ * Loads the history for a time range as evenly spaced points.
+ *
+ * The window is cut into buckets of `bucketSeconds` and each bucket holds the
+ * average of the samples inside it. Two tables feed the result:
+ * - `system_samples` (raw, per second) for everything inside the raw retention window.
+ * - `system_minute` (one-minute averages) for anything older than the oldest raw row.
+ * Without the second table a 24-hour chart would only show the last two hours.
+ */
 export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryPoint[]> {
-  const seconds = rangeToSeconds(range);
+  const windowSeconds = rangeToSeconds(range);
+  const bucketSeconds = Math.max(1, Math.round(windowSeconds / HISTORY_TARGET_POINTS));
 
-  // For long windows like 24h, we group into buckets to keep the dataset responsive.
-  const isLongWindow = seconds >= 3600;
-  const bucketSeconds = isLongWindow ? (seconds > 7200 ? 300 : 60) : 2;
-
-  const sql = isLongWindow
-    ? `
-      WITH anchor AS (SELECT max(timestamp) as max_ts FROM system_samples)
+  // "anchor" finds the newest and oldest raw timestamps once; both parts below use them.
+  const sql = `
+    WITH anchor AS (
+      SELECT max(timestamp) AS max_ts, min(timestamp) AS min_ts FROM system_samples
+    ),
+    live AS (
       SELECT
-        (CAST(timestamp / ${bucketSeconds} AS INT) * ${bucketSeconds}) as timestamp,
-        round(avg(cpu_load * 100), 1) as cpu_percent,
-        round(avg(pressure_percent), 1) as memory_pressure,
-        round(avg(gpu_util), 1) as gpu_percent,
-        round(avg(disk_read) / 1048576.0, 2) as disk_read_mb,
-        round(avg(disk_write) / 1048576.0, 2) as disk_write_mb,
-        round(avg(net_in) / 1024.0, 1) as net_in_kb,
-        round(avg(net_out) / 1024.0, 1) as net_out_kb,
-        round(avg(cpu_die), 1) as cpu_temp,
-        round(avg(gpu_die), 1) as gpu_temp,
-        round(avg(abs(battery_power)), 2) as battery_watts,
-        round(avg(battery_charge), 1) as battery_percent
+        CAST(timestamp / ${bucketSeconds} AS INT) * ${bucketSeconds} AS bucket,
+        avg(cpu_load * 100) AS cpu_percent,
+        avg(pressure_percent) AS memory_pressure,
+        avg(gpu_util) AS gpu_percent,
+        avg(disk_read) / 1048576.0 AS disk_read_mb,
+        avg(disk_write) / 1048576.0 AS disk_write_mb,
+        avg(cpu_die) AS cpu_temp,
+        avg(gpu_die) AS gpu_temp,
+        avg(energy_power) AS power_watts
       FROM system_samples, anchor
-      WHERE timestamp >= (max_ts - ${seconds})
+      WHERE timestamp >= max_ts - ${windowSeconds}
       GROUP BY 1
-      ORDER BY 1 ASC;
-    `
-    : `
-      WITH anchor AS (SELECT max(timestamp) as max_ts FROM system_samples)
+    ),
+    archive AS (
       SELECT
-        timestamp,
-        round(cpu_load * 100, 1) as cpu_percent,
-        round(pressure_percent, 1) as memory_pressure,
-        round(gpu_util, 1) as gpu_percent,
-        round(disk_read / 1048576.0, 2) as disk_read_mb,
-        round(disk_write / 1048576.0, 2) as disk_write_mb,
-        round(net_in / 1024.0, 1) as net_in_kb,
-        round(net_out / 1024.0, 1) as net_out_kb,
-        cpu_die as cpu_temp,
-        gpu_die as gpu_temp,
-        round(abs(battery_power), 2) as battery_watts,
-        battery_charge as battery_percent
-      FROM system_samples, anchor
-      WHERE timestamp >= (max_ts - ${seconds})
-      ORDER BY timestamp ASC;
-    `;
+        CAST(bucket / ${bucketSeconds} AS INT) * ${bucketSeconds} AS bucket,
+        avg(cpu_avg * 100) AS cpu_percent,
+        avg(pressure_avg) AS memory_pressure,
+        avg(gpu_util_avg) AS gpu_percent,
+        avg(disk_read_avg) / 1048576.0 AS disk_read_mb,
+        avg(disk_write_avg) / 1048576.0 AS disk_write_mb,
+        avg(cpu_die_avg) AS cpu_temp,
+        avg(gpu_die_avg) AS gpu_temp,
+        avg(energy_power) AS power_watts
+      FROM system_minute, anchor
+      WHERE bucket >= max_ts - ${windowSeconds} AND bucket < min_ts
+      GROUP BY 1
+    )
+    SELECT * FROM archive
+    UNION ALL
+    SELECT * FROM live
+    ORDER BY bucket ASC;
+  `;
 
   const rows = await querySqlite<RawHistoryRow>(sql);
 
-  return rows.map((r) => ({
-    timestamp: r.timestamp,
-    cpuPercent: r.cpu_percent || 0,
-    memoryPressure: r.memory_pressure || 0,
-    gpuPercent: r.gpu_percent || 0,
-    diskReadMb: r.disk_read_mb || 0,
-    diskWriteMb: r.disk_write_mb || 0,
-    netInKb: r.net_in_kb || 0,
-    netOutKb: r.net_out_kb || 0,
-    cpuTemp: r.cpu_temp,
-    gpuTemp: r.gpu_temp,
-    batteryWatts: r.battery_watts || 0,
-    batteryPercent: r.battery_percent || 0,
-  }));
-}
-
-export function extractAppNameFromPath(filePath?: string | null): string | null {
-  if (!filePath) return null;
-  const match = filePath.match(/(?:^|\/)([^/]+)\.app(?:\/|$)/i);
-  return match ? match[1] : null;
-}
-
-function resolveProcessName(name: string, executablePath?: string | null): string {
-  if (executablePath && executablePath.includes("/") && name.length >= 15) {
-    const lastSlash = executablePath.lastIndexOf("/");
-    if (lastSlash >= 0 && lastSlash < executablePath.length - 1) {
-      return executablePath.substring(lastSlash + 1);
-    }
-  }
-  return name || "Unknown";
-}
-
-interface ProcessTree {
-  parentMap: Map<number, number>;
-  appByPid: Map<number, string>;
-}
-
-let cachedTree: ProcessTree | null = null;
-let lastTreeFetchTime = 0;
-const TREE_CACHE_TTL_MS = 2000;
-
-function getProcessTree(): ProcessTree {
-  const now = Date.now();
-  if (cachedTree && now - lastTreeFetchTime < TREE_CACHE_TTL_MS) {
-    return {
-      parentMap: new Map(cachedTree.parentMap),
-      appByPid: new Map(cachedTree.appByPid),
-    };
-  }
-
-  const parentMap = new Map<number, number>();
-  const appByPid = new Map<number, string>();
-
-  try {
-    const stdout = execSync("ps -axo pid,ppid,comm", {
-      encoding: "utf-8",
-      timeout: 1500,
-      stdio: ["pipe", "pipe", "ignore"],
+  const points: SystemHistoryPoint[] = [];
+  for (const r of rows) {
+    points.push({
+      timestamp: r.bucket,
+      cpuPercent: r.cpu_percent,
+      memoryPressure: r.memory_pressure,
+      gpuPercent: missingAsZero(r.gpu_percent),
+      diskReadMb: r.disk_read_mb,
+      diskWriteMb: r.disk_write_mb,
+      cpuTemp: missingAsZero(r.cpu_temp),
+      gpuTemp: missingAsZero(r.gpu_temp),
+      powerWatts: missingAsZero(r.power_watts),
     });
-
-    const lines = stdout.split("\n");
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const parts = line.split(/\s+/);
-      if (parts.length >= 3) {
-        const pid = parseInt(parts[0], 10);
-        const ppid = parseInt(parts[1], 10);
-        const comm = parts.slice(2).join(" ");
-        if (!isNaN(pid) && !isNaN(ppid)) {
-          parentMap.set(pid, ppid);
-          const appName = extractAppNameFromPath(comm);
-          if (appName) {
-            appByPid.set(pid, appName);
-          }
-        }
-      }
-    }
-  } catch {
-    // If ps command fails, fall back to process paths
   }
-
-  cachedTree = { parentMap, appByPid };
-  lastTreeFetchTime = now;
-  return {
-    parentMap: new Map(parentMap),
-    appByPid: new Map(appByPid),
-  };
+  return points;
 }
 
-function resolveAppName(
-  row: { pid: number; name: string; executable_path?: string | null },
-  appByPid: Map<number, string>,
-  parentMap: Map<number, number>,
-): string {
-  // 1. Direct app match from executable path
-  const directApp = extractAppNameFromPath(row.executable_path);
-  if (directApp) {
-    appByPid.set(row.pid, directApp);
-    return directApp;
+// ---------------------------------------------------------------------------
+// Live process table (from the `ps` command)
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls the app name out of a path that goes through a `.app` bundle.
+ * "/Applications/Safari.app/Contents/MacOS/Safari" gives "Safari".
+ * The first `.app` in the path wins, so a helper nested inside a bundle
+ * ("Google Chrome.app/.../Google Chrome Helper.app/...") resolves to the outer app.
+ * Returns null when the path has no `.app` component.
+ */
+export function extractAppNameFromPath(filePath: string | null): string | null {
+  if (filePath === null) {
+    return null;
   }
-
-  // 2. Direct app match from ps comm already in appByPid
-  const psApp = appByPid.get(row.pid);
-  if (psApp) {
-    return psApp;
+  const match = filePath.match(/(?:^|\/)([^/]+)\.app(?:\/|$)/i);
+  if (match === null) {
+    return null;
   }
-
-  // 3. Walk parent process ancestry to inherit parent app identity
-  let currentPid = row.pid;
-  const visited = new Set<number>([currentPid]);
-  while (true) {
-    const parentPid = parentMap.get(currentPid);
-    if (!parentPid || parentPid <= 1 || visited.has(parentPid)) {
-      break;
-    }
-    visited.add(parentPid);
-
-    const ancestorApp = appByPid.get(parentPid);
-    if (ancestorApp) {
-      appByPid.set(row.pid, ancestorApp);
-      return ancestorApp;
-    }
-    currentPid = parentPid;
-  }
-
-  // 4. Special cases: WebKit subsystem
-  if (row.executable_path && row.executable_path.includes("WebKit")) {
-    appByPid.set(row.pid, "Safari / WebKit");
-    return "Safari / WebKit";
-  }
-
-  // 5. De-truncate kernel names (16 chars) using executable_path
-  const resolved = resolveProcessName(row.name, row.executable_path);
-  appByPid.set(row.pid, resolved);
-  return resolved;
+  return match[1];
 }
 
+/** The main binary of the native app. Its presence in `ps` means the recorder is running. */
+const MONITOR_BINARY = "/Mac Performance Monitor.app/Contents/MacOS/Mac Performance Monitor";
+
+/** A snapshot of the processes running on this Mac right now. */
+export interface ProcessTree {
+  /** Child PID to parent PID. */
+  parentMap: Map<number, number>;
+  /** PID to app name, for processes whose binary lives inside a `.app` bundle. */
+  appByPid: Map<number, string>;
+  /** Whether the Mac Performance Monitor app itself is running. */
+  isMonitorRunning: boolean;
+}
+
+/** Runs `ps` and reads the current process table. Throws if `ps` fails. */
+export async function getProcessTree(): Promise<ProcessTree> {
+  const result = await execFileAsync("/bin/ps", ["-axo", "pid,ppid,comm"], { maxBuffer: 4 * 1024 * 1024 });
+  const tree: ProcessTree = { parentMap: new Map(), appByPid: new Map(), isMonitorRunning: false };
+
+  // One process per line, header line first.
+  const lines = result.stdout.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    // Each line looks like "  123   1 /path/to/binary". The path may contain spaces,
+    // so take the first two numbers and treat everything after as the path.
+    const match = lines[i].trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
+    if (match === null) {
+      continue;
+    }
+    const pid = Number(match[1]);
+    const parentPid = Number(match[2]);
+    const command = match[3];
+
+    tree.parentMap.set(pid, parentPid);
+
+    const appName = extractAppNameFromPath(command);
+    if (appName !== null) {
+      tree.appByPid.set(pid, appName);
+    }
+    if (command.endsWith(MONITOR_BINARY)) {
+      tree.isMonitorRunning = true;
+    }
+  }
+
+  return tree;
+}
+
+// ---------------------------------------------------------------------------
+// Recorded processes with their latest sample
+// ---------------------------------------------------------------------------
+
+/** One recorded process with its most recent values. */
+export interface ActiveProcess {
+  pid: number;
+  name: string;
+  executablePath: string | null;
+  bundleId: string | null;
+  architecture: string;
+  isTranslated: boolean;
+  memoryBytes: number;
+  /** Percent of one core, so it can exceed 100. */
+  cpuPercent: number;
+  gpuPercent: number;
+  energyImpact: number;
+  /** Bytes read per second over the recent window (0 when only one sample exists). */
+  diskReadRate: number;
+  /** Bytes written per second over the recent window (0 when only one sample exists). */
+  diskWriteRate: number;
+}
+
+/** One row of the query in getActiveProcesses. */
 interface RawActiveProcessRow {
-  process_id: number;
   pid: number;
   name: string;
   executable_path: string | null;
   bundle_id: string | null;
-  architecture: string | null;
-  is_translated: number | null;
+  architecture: string;
+  is_translated: number;
   phys_footprint: number;
   cpu_percent: number;
   gpu_percent: number;
+  energy_impact: number;
   disk_read: number;
   disk_written: number;
-  energy_impact: number;
+  disk_read_prev: number;
+  disk_written_prev: number;
+  span: number;
 }
 
-async function getRawActiveProcesses(): Promise<RawActiveProcessRow[]> {
+/**
+ * Loads every process that has a sample inside the recent window, with its latest values.
+ *
+ * Window size: the recorder writes a process row only when something changed, or
+ * on a heartbeat once per `minute_bucket_seconds` (default 60, user configurable).
+ * The window is one heartbeat plus slack so idle processes are not missed.
+ * Processes that have since quit are removed later against the live `ps` table.
+ *
+ * Disk rate: `disk_read` and `disk_written` are totals since the process started,
+ * so the rate is (newest - oldest) / seconds between them.
+ */
+export async function getActiveProcesses(): Promise<ActiveProcess[]> {
+  // The "window_samples" part finds, per process, the newest and oldest sample in the
+  // window. The main SELECT then joins the newest row (for current values), the oldest
+  // row (for the disk rate), and the process's identity row.
   const sql = `
-    WITH latest_sample AS (
-      SELECT MAX(timestamp) AS max_ts FROM process_samples
-    ),
-    latest_per_proc AS (
-      SELECT process_id, MAX(timestamp) AS max_ts
-      FROM process_samples, latest_sample
-      WHERE timestamp >= (max_ts - 60)
+    WITH window_samples AS (
+      SELECT process_id, MAX(timestamp) AS max_ts, MIN(timestamp) AS min_ts
+      FROM process_samples
+      WHERE timestamp >= (SELECT MAX(timestamp) FROM process_samples)
+        - (COALESCE((SELECT value FROM meta WHERE key = 'minute_bucket_seconds'), 60) + 15)
       GROUP BY process_id
     )
     SELECT
-      p.id AS process_id,
       p.pid,
       p.name,
       p.executable_path,
       p.bundle_id,
       p.architecture,
       p.is_translated,
-      ps.phys_footprint,
-      ps.cpu_percent,
-      ps.gpu_percent,
-      ps.disk_read,
-      ps.disk_written,
-      ps.energy_impact
-    FROM latest_per_proc l
-    JOIN process_samples ps ON ps.process_id = l.process_id AND ps.timestamp = l.max_ts
-    JOIN processes p ON ps.process_id = p.id;
+      latest.phys_footprint,
+      latest.cpu_percent,
+      latest.gpu_percent,
+      latest.energy_impact,
+      latest.disk_read,
+      latest.disk_written,
+      oldest.disk_read AS disk_read_prev,
+      oldest.disk_written AS disk_written_prev,
+      (w.max_ts - w.min_ts) AS span
+    FROM window_samples w
+    JOIN process_samples latest ON latest.process_id = w.process_id AND latest.timestamp = w.max_ts
+    JOIN process_samples oldest ON oldest.process_id = w.process_id AND oldest.timestamp = w.min_ts
+    JOIN processes p ON p.id = w.process_id;
   `;
 
-  return querySqlite<RawActiveProcessRow>(sql);
+  const rows = await querySqlite<RawActiveProcessRow>(sql);
+
+  const processes: ActiveProcess[] = [];
+  for (const r of rows) {
+    let diskReadRate = 0;
+    let diskWriteRate = 0;
+    if (r.span > 0) {
+      diskReadRate = Math.max(0, (r.disk_read - r.disk_read_prev) / r.span);
+      diskWriteRate = Math.max(0, (r.disk_written - r.disk_written_prev) / r.span);
+    }
+
+    processes.push({
+      pid: r.pid,
+      name: r.name,
+      executablePath: r.executable_path,
+      bundleId: r.bundle_id,
+      architecture: r.architecture,
+      isTranslated: r.is_translated === 1,
+      memoryBytes: r.phys_footprint,
+      cpuPercent: r.cpu_percent,
+      gpuPercent: r.gpu_percent,
+      energyImpact: r.energy_impact,
+      diskReadRate: diskReadRate,
+      diskWriteRate: diskWriteRate,
+    });
+  }
+  return processes;
 }
 
-interface MutableAppGroup {
+// ---------------------------------------------------------------------------
+// Grouping processes into applications
+// ---------------------------------------------------------------------------
+
+/**
+ * The kernel truncates process names to 16 characters. When the name looks
+ * truncated and we know the binary's path, use the file name from the path instead.
+ */
+function resolveProcessName(name: string, executablePath: string | null): string {
+  if (executablePath !== null && name.length >= 15) {
+    const lastSlash = executablePath.lastIndexOf("/");
+    const fileName = executablePath.substring(lastSlash + 1);
+    if (fileName.length > 0) {
+      return fileName;
+    }
+  }
+  if (name.length === 0) {
+    return "Unknown";
+  }
+  return name;
+}
+
+/**
+ * Decides which application a process belongs to, in this order:
+ * 1. The PID is already attributed to an app (its own binary is inside a `.app`,
+ *    or `ps` saw it there).
+ * 2. An ancestor process belongs to an app. This is how a shell or compiler
+ *    running under a terminal or IDE is counted toward that terminal or IDE.
+ * 3. WebKit content processes without a known owner belong to "Safari / WebKit".
+ * 4. Otherwise the process stands alone under its own (de-truncated) name.
+ *
+ * Results are memoized into `appByPid` so the ancestor walk runs once per PID.
+ */
+function resolveAppName(proc: ActiveProcess, appByPid: Map<number, string>, parentMap: Map<number, number>): string {
+  const known = appByPid.get(proc.pid);
+  if (known !== undefined) {
+    return known;
+  }
+
+  // Walk up the parent chain. `visited` guards against a cycle in a broken ps output.
+  let currentPid = proc.pid;
+  const visited = new Set<number>();
+  visited.add(currentPid);
+  while (true) {
+    const parentPid = parentMap.get(currentPid);
+    if (parentPid === undefined || parentPid <= 1 || visited.has(parentPid)) {
+      break;
+    }
+    visited.add(parentPid);
+
+    const ancestorApp = appByPid.get(parentPid);
+    if (ancestorApp !== undefined) {
+      appByPid.set(proc.pid, ancestorApp);
+      return ancestorApp;
+    }
+    currentPid = parentPid;
+  }
+
+  let resolved: string;
+  if (proc.executablePath !== null && proc.executablePath.includes("WebKit")) {
+    resolved = "Safari / WebKit";
+  } else {
+    resolved = resolveProcessName(proc.name, proc.executablePath);
+  }
+  appByPid.set(proc.pid, resolved);
+  return resolved;
+}
+
+/** A recorded process together with the app it was attributed to. */
+interface AttributedProcess {
+  proc: ActiveProcess;
   appName: string;
-  processCount: number;
-  memoryBytes: number;
-  cpuPercent: number;
-  gpuPercent: number;
-  diskReadBytes: number;
-  diskWrittenBytes: number;
-  energyImpact: number;
-  primaryPid: number;
-  executablePath: string | null;
-  bundleId: string | null;
-  hasAppBundleMatch: boolean;
-  minPid: number;
 }
 
-export type SortMetric = "memory" | "cpu" | "gpu" | "disk" | "energy";
-
-export async function getGroupedApps(sortBy: SortMetric = "memory", limit = 40): Promise<AppGroup[]> {
-  const rawRows = await getRawActiveProcesses();
-  const { parentMap, appByPid } = getProcessTree();
-
-  // Filter out terminated processes: only retain processes whose PID is currently alive on macOS
-  const rows = parentMap.size > 0 ? rawRows.filter((r) => parentMap.has(r.pid)) : rawRows;
-
-  // Seed appByPid with direct app bundle paths from active database processes
-  for (const row of rows) {
-    const directApp = extractAppNameFromPath(row.executable_path);
-    if (directApp) {
-      appByPid.set(row.pid, directApp);
+/**
+ * Drops processes that are no longer running (not in `ps`) and attaches an app name to the rest.
+ */
+function attributeProcesses(processes: ActiveProcess[], tree: ProcessTree): AttributedProcess[] {
+  const alive: ActiveProcess[] = [];
+  for (const proc of processes) {
+    if (tree.parentMap.has(proc.pid)) {
+      alive.push(proc);
     }
   }
 
-  const groups = new Map<string, MutableAppGroup>();
+  // Work on a copy: resolveAppName writes into this map.
+  const appByPid = new Map(tree.appByPid);
+  for (const proc of alive) {
+    const directApp = extractAppNameFromPath(proc.executablePath);
+    if (directApp !== null) {
+      appByPid.set(proc.pid, directApp);
+    }
+  }
 
-  for (const row of rows) {
-    const appName = resolveAppName(row, appByPid, parentMap);
+  const result: AttributedProcess[] = [];
+  for (const proc of alive) {
+    result.push({ proc: proc, appName: resolveAppName(proc, appByPid, tree.parentMap) });
+  }
+  return result;
+}
+
+/**
+ * Adds up every live process into its application. Pure: no I/O.
+ *
+ * Each group's "primary" process is the app's own main binary when there is one
+ * (lowest PID among those), otherwise the lowest-PID member. Its path and bundle
+ * id are what the views show and what Quit App uses.
+ */
+export function groupProcesses(processes: ActiveProcess[], tree: ProcessTree): AppGroup[] {
+  const groups = new Map<string, AppGroup>();
+  // Tracks, per group, whether the current primary is the app's own binary.
+  const primaryIsAppBinary = new Map<string, boolean>();
+
+  for (const entry of attributeProcesses(processes, tree)) {
+    const proc = entry.proc;
+    const appName = entry.appName;
+
     let group = groups.get(appName);
-
-    if (!group) {
+    if (group === undefined) {
       group = {
-        appName,
+        appName: appName,
         processCount: 0,
+        pids: [],
         memoryBytes: 0,
         cpuPercent: 0,
         gpuPercent: 0,
         diskReadBytes: 0,
         diskWrittenBytes: 0,
         energyImpact: 0,
-        primaryPid: row.pid,
-        executablePath: row.executable_path,
-        bundleId: row.bundle_id,
-        hasAppBundleMatch: false,
-        minPid: row.pid,
+        primaryPid: proc.pid,
+        executablePath: proc.executablePath,
+        bundleId: proc.bundleId,
       };
       groups.set(appName, group);
+      primaryIsAppBinary.set(appName, false);
     }
 
     group.processCount += 1;
-    group.memoryBytes += row.phys_footprint || 0;
-    group.cpuPercent += row.cpu_percent || 0;
-    group.gpuPercent += row.gpu_percent || 0;
-    group.diskReadBytes += row.disk_read || 0;
-    group.diskWrittenBytes += row.disk_written || 0;
-    group.energyImpact += row.energy_impact || 0;
+    group.pids.push(proc.pid);
+    group.memoryBytes += proc.memoryBytes;
+    group.cpuPercent += proc.cpuPercent;
+    group.gpuPercent += proc.gpuPercent;
+    group.diskReadBytes += proc.diskReadRate;
+    group.diskWrittenBytes += proc.diskWriteRate;
+    group.energyImpact += proc.energyImpact;
 
-    const isAppBundleMatch = extractAppNameFromPath(row.executable_path) === appName;
-    if (isAppBundleMatch) {
-      if (!group.hasAppBundleMatch || row.pid < group.primaryPid) {
-        group.primaryPid = row.pid;
-        group.executablePath = row.executable_path;
-        group.bundleId = row.bundle_id;
-        group.hasAppBundleMatch = true;
-      }
-    } else if (!group.hasAppBundleMatch) {
-      if (row.pid < group.minPid) {
-        group.minPid = row.pid;
-        group.primaryPid = row.pid;
-        group.executablePath = row.executable_path;
-        group.bundleId = row.bundle_id;
-      }
+    // Should this process become the group's primary?
+    const isAppBinary = extractAppNameFromPath(proc.executablePath) === appName;
+    const currentIsAppBinary = primaryIsAppBinary.get(appName) === true;
+    let takeOver = false;
+    if (isAppBinary && !currentIsAppBinary) {
+      takeOver = true; // an app binary always beats a helper
+    } else if (isAppBinary === currentIsAppBinary && proc.pid < group.primaryPid) {
+      takeOver = true; // same kind: the older (lower PID) one wins
+    }
+    if (takeOver) {
+      group.primaryPid = proc.pid;
+      group.executablePath = proc.executablePath;
+      group.bundleId = proc.bundleId;
+      primaryIsAppBinary.set(appName, isAppBinary);
     }
   }
 
-  const result: AppGroup[] = Array.from(groups.values()).map((g) => ({
-    appName: g.appName,
-    processCount: g.processCount,
-    memoryBytes: g.memoryBytes,
-    cpuPercent: Math.round(g.cpuPercent * 10) / 10,
-    gpuPercent: Math.round(g.gpuPercent * 10) / 10,
-    diskReadBytes: g.diskReadBytes,
-    diskWrittenBytes: g.diskWrittenBytes,
-    energyImpact: Math.round(g.energyImpact * 10) / 10,
-    primaryPid: g.primaryPid,
-    executablePath: g.executablePath,
-    bundleId: g.bundleId,
-  }));
+  const result: AppGroup[] = [];
+  for (const group of groups.values()) {
+    group.cpuPercent = round1(group.cpuPercent);
+    group.gpuPercent = round1(group.gpuPercent);
+    group.energyImpact = round1(group.energyImpact);
+    result.push(group);
+  }
+  return result;
+}
 
-  result.sort((a, b) => {
-    switch (sortBy) {
-      case "memory":
-        return b.memoryBytes - a.memoryBytes;
-      case "cpu":
-        return b.cpuPercent - a.cpuPercent;
-      case "gpu":
-        return b.gpuPercent - a.gpuPercent;
-      case "disk":
-        return b.diskReadBytes + b.diskWrittenBytes - (a.diskReadBytes + a.diskWrittenBytes);
-      case "energy":
-        return b.energyImpact - a.energyImpact;
+/** The metrics an app list can be sorted by. */
+export type SortMetric = "memory" | "cpu" | "gpu" | "disk" | "energy";
+
+/** The value of one metric for an app, used for sorting and leaderboards. */
+export function metricValue(app: AppGroup, metric: SortMetric): number {
+  switch (metric) {
+    case "memory":
+      return app.memoryBytes;
+    case "cpu":
+      return app.cpuPercent;
+    case "gpu":
+      return app.gpuPercent;
+    case "disk":
+      return app.diskReadBytes + app.diskWrittenBytes;
+    case "energy":
+      return app.energyImpact;
+  }
+}
+
+/** Returns a new array sorted by the metric, highest first. Ties are broken by name. */
+export function sortApps(apps: AppGroup[], metric: SortMetric): AppGroup[] {
+  const sorted = apps.slice();
+  sorted.sort((a, b) => {
+    const difference = metricValue(b, metric) - metricValue(a, metric);
+    if (difference !== 0) {
+      return difference;
     }
+    return a.appName.localeCompare(b.appName);
   });
-
-  return result.slice(0, limit);
+  return sorted;
 }
 
+/**
+ * Lists the live processes that belong to one application, largest memory first.
+ */
 export async function getAppSubprocesses(appName: string): Promise<SubprocessItem[]> {
-  const rawRows = await getRawActiveProcesses();
-  const { parentMap, appByPid } = getProcessTree();
+  const processes = await getActiveProcesses();
+  const tree = await getProcessTree();
 
-  // Filter out terminated processes: only retain processes whose PID is currently alive on macOS
-  const rows = parentMap.size > 0 ? rawRows.filter((r) => parentMap.has(r.pid)) : rawRows;
-
-  // Seed appByPid with direct app bundle paths from active database processes
-  for (const row of rows) {
-    const directApp = extractAppNameFromPath(row.executable_path);
-    if (directApp) {
-      appByPid.set(row.pid, directApp);
+  const items: SubprocessItem[] = [];
+  for (const entry of attributeProcesses(processes, tree)) {
+    if (entry.appName !== appName) {
+      continue;
     }
+    const proc = entry.proc;
+    items.push({
+      pid: proc.pid,
+      name: resolveProcessName(proc.name, proc.executablePath),
+      executablePath: proc.executablePath === null ? "" : proc.executablePath,
+      memoryBytes: proc.memoryBytes,
+      cpuPercent: round1(proc.cpuPercent),
+      gpuPercent: round1(proc.gpuPercent),
+      diskReadBytes: proc.diskReadRate,
+      diskWrittenBytes: proc.diskWriteRate,
+      energyImpact: round1(proc.energyImpact),
+      architecture: proc.architecture,
+      isTranslated: proc.isTranslated,
+    });
   }
 
-  const matching: SubprocessItem[] = [];
-
-  for (const row of rows) {
-    const resolvedApp = resolveAppName(row, appByPid, parentMap);
-    if (resolvedApp === appName) {
-      matching.push({
-        pid: row.pid,
-        name: resolveProcessName(row.name, row.executable_path),
-        executablePath: row.executable_path || "",
-        memoryBytes: row.phys_footprint || 0,
-        cpuPercent: Math.round((row.cpu_percent || 0) * 10) / 10,
-        gpuPercent: Math.round((row.gpu_percent || 0) * 10) / 10,
-        diskReadBytes: row.disk_read || 0,
-        diskWrittenBytes: row.disk_written || 0,
-        energyImpact: Math.round((row.energy_impact || 0) * 10) / 10,
-        architecture: row.architecture || "unknown",
-        isTranslated: row.is_translated === 1,
-      });
-    }
-  }
-
-  matching.sort((a, b) => b.memoryBytes - a.memoryBytes);
-  return matching;
+  items.sort((a, b) => b.memoryBytes - a.memoryBytes);
+  return items;
 }
+
+// ---------------------------------------------------------------------------
+// Hardware topology and per-core CPU usage
+// ---------------------------------------------------------------------------
 
 interface RawMetaRow {
   key: string;
   value: number;
 }
 
+/** Reads this Mac's core counts from the `meta` table, where the app records them. */
 export async function getMacTopology(): Promise<MacTopology> {
-  const metaRows = await querySqlite<RawMetaRow>("SELECT key, value FROM meta WHERE key LIKE 'agent.%';");
+  const rows = await querySqlite<RawMetaRow>("SELECT key, value FROM meta WHERE key LIKE 'agent.%';");
 
-  const metaMap = new Map<string, number>();
-  for (const row of metaRows) {
-    metaMap.set(row.key, row.value);
-  }
-
-  const cpus = os.cpus();
-  const totalLogical = cpus.length;
-  const chipModel = cpus[0]?.model || "Apple Silicon";
-
-  let pCores = metaMap.get("agent.performance_cores");
-  let eCores = metaMap.get("agent.efficiency_cores");
-
-  if (pCores === undefined || eCores === undefined) {
-    try {
-      const out = execSync("sysctl -n hw.perflevel0.logicalcpu hw.perflevel1.logicalcpu", {
-        encoding: "utf-8",
-        timeout: 1000,
-      })
-        .trim()
-        .split(/\s+/);
-      if (out.length >= 2) {
-        pCores = parseInt(out[0], 10);
-        eCores = parseInt(out[1], 10);
-      }
-    } catch {
-      // Fallback if sysctl fails
+  const topology: MacTopology = { cpuCores: 0, performanceCores: 0, efficiencyCores: 0 };
+  for (const row of rows) {
+    if (row.key === "agent.cpu_cores") {
+      topology.cpuCores = row.value;
+    } else if (row.key === "agent.performance_cores") {
+      topology.performanceCores = row.value;
+    } else if (row.key === "agent.efficiency_cores") {
+      topology.efficiencyCores = row.value;
     }
   }
-
-  pCores = pCores ?? Math.floor(totalLogical / 2);
-  eCores = eCores ?? totalLogical - pCores;
-  const totalRam = metaMap.get("agent.memory_bytes") ?? os.totalmem();
-
-  return {
-    cpuCores: metaMap.get("agent.cpu_cores") ?? totalLogical,
-    performanceCores: pCores,
-    efficiencyCores: eCores,
-    memoryBytes: totalRam,
-    chip: chipModel,
-    model: os.hostname(),
-  };
+  return topology;
 }
 
-let previousCpuTimes: { user: number; nice: number; sys: number; idle: number; irq: number }[] | null = null;
+/** Accumulated CPU time counters for one core, as reported by os.cpus(). */
+interface CoreTimes {
+  user: number;
+  nice: number;
+  sys: number;
+  idle: number;
+}
 
+// The counters from the previous call. Usage is the change since then.
+let previousCoreTimes: CoreTimes[] | null = null;
+
+/**
+ * Measures per-core utilization as the change in CPU time counters since the
+ * previous call. The first call only records a baseline and reports zero usage.
+ *
+ * Core kinds: on Apple Silicon the kernel numbers the efficiency cores first,
+ * so the first `efficiencyCores` indices are E-cores and the rest are P-cores.
+ */
 export function sampleCoreUsage(topology: MacTopology): CoreUsage[] {
-  const currentCpus = os.cpus();
-  if (!previousCpuTimes || previousCpuTimes.length !== currentCpus.length) {
-    previousCpuTimes = currentCpus.map((c) => c.times);
-    // Return empty or zero on initial measurement
-    return currentCpus.map((_, index) => {
-      const isEfficiency =
-        index < topology.efficiencyCores && topology.efficiencyCores + topology.performanceCores === currentCpus.length;
-      return {
-        index,
-        kind: isEfficiency ? "efficiency" : "performance",
-        usage: 0,
-      };
-    });
+  const cpus = os.cpus();
+
+  const currentTimes: CoreTimes[] = [];
+  for (const cpu of cpus) {
+    currentTimes.push({ user: cpu.times.user, nice: cpu.times.nice, sys: cpu.times.sys, idle: cpu.times.idle });
   }
 
-  const results: CoreUsage[] = [];
-  for (let i = 0; i < currentCpus.length; i++) {
-    const prev = previousCpuTimes[i];
-    const curr = currentCpus[i].times;
+  const previous = previousCoreTimes;
+  previousCoreTimes = currentTimes;
 
-    const userDelta = curr.user - prev.user;
-    const sysDelta = curr.sys - prev.sys;
-    const idleDelta = curr.idle - prev.idle;
-    const totalDelta = userDelta + sysDelta + idleDelta;
+  const result: CoreUsage[] = [];
+  for (let i = 0; i < cpus.length; i++) {
+    let kind: "performance" | "efficiency" = "performance";
+    if (i < topology.efficiencyCores) {
+      kind = "efficiency";
+    }
 
-    const busyShare = totalDelta > 0 ? ((userDelta + sysDelta) / totalDelta) * 100 : 0;
-    const isEfficiency =
-      i < topology.efficiencyCores && topology.efficiencyCores + topology.performanceCores === currentCpus.length;
+    let usage = 0;
+    if (previous !== null) {
+      const now = currentTimes[i];
+      const before = previous[i];
+      const busy = now.user - before.user + (now.nice - before.nice) + (now.sys - before.sys);
+      const total = busy + (now.idle - before.idle);
+      // total is 0 when two calls land in the same clock tick.
+      if (total > 0) {
+        usage = Math.round((busy / total) * 100);
+      }
+    }
 
-    results.push({
-      index: i,
-      kind: isEfficiency ? "efficiency" : "performance",
-      usage: Math.min(100, Math.max(0, Math.round(busyShare))),
-    });
+    result.push({ index: i, kind: kind, usage: usage });
   }
-
-  previousCpuTimes = currentCpus.map((c) => c.times);
-  return results;
+  return result;
 }
 
-// Workload Classification matching GPUWorkload.swift
+// ---------------------------------------------------------------------------
+// Workload classification (same marker lists as GPUWorkload.swift in the app)
+// ---------------------------------------------------------------------------
+
 const AI_MARKERS = [
   "ollama",
   "llama-server",
@@ -719,48 +838,53 @@ const DISPLAY_MARKERS = [
   "accessibilityui",
 ];
 
+/** True when any marker appears in the text. */
+function containsAny(text: string, markers: string[]): boolean {
+  for (const marker of markers) {
+    if (text.includes(marker)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Puts a process or app into a workload category by looking for known names in
+ * its name, bundle id and path.
+ */
 export function classifyProcessWorkload(
   name: string,
-  bundleId?: string | null,
-  executablePath?: string | null,
-): "aiMl" | "displayUi" | "media" | "other" {
-  const key = [name, bundleId || "", executablePath || ""].join(" ").toLowerCase();
-
-  for (const marker of AI_MARKERS) {
-    if (key.includes(marker)) return "aiMl";
+  bundleId: string | null,
+  executablePath: string | null,
+): WorkloadCategory {
+  let text = name.toLowerCase();
+  if (bundleId !== null) {
+    text += " " + bundleId.toLowerCase();
   }
-  for (const marker of MEDIA_MARKERS) {
-    if (key.includes(marker)) return "media";
+  if (executablePath !== null) {
+    text += " " + executablePath.toLowerCase();
   }
-  for (const marker of DISPLAY_MARKERS) {
-    if (key.includes(marker)) return "displayUi";
+  if (containsAny(text, AI_MARKERS)) {
+    return "aiMl";
+  }
+  if (containsAny(text, MEDIA_MARKERS)) {
+    return "media";
+  }
+  if (containsAny(text, DISPLAY_MARKERS)) {
+    return "displayUi";
   }
   return "other";
 }
 
-export async function getGpuWorkloadSlices(): Promise<WorkloadSlices> {
-  const apps = await getGroupedApps("gpu", 60);
+/** Adds up GPU percent per workload category. Pure: no I/O. */
+export function computeGpuWorkload(apps: AppGroup[]): WorkloadSlices {
   const slices: WorkloadSlices = { aiMl: 0, displayUi: 0, media: 0, other: 0 };
-
   for (const app of apps) {
-    if (app.gpuPercent <= 0) continue;
+    if (app.gpuPercent <= 0) {
+      continue;
+    }
     const category = classifyProcessWorkload(app.appName, app.bundleId, app.executablePath);
     slices[category] += app.gpuPercent;
   }
-
-  return slices;
-}
-
-export async function getDiskWorkloadSlices(): Promise<WorkloadSlices> {
-  const apps = await getGroupedApps("disk", 60);
-  const slices: WorkloadSlices = { aiMl: 0, displayUi: 0, media: 0, other: 0 };
-
-  for (const app of apps) {
-    const totalBytes = app.diskReadBytes + app.diskWrittenBytes;
-    if (totalBytes <= 0) continue;
-    const category = classifyProcessWorkload(app.appName, app.bundleId, app.executablePath);
-    slices[category] += totalBytes;
-  }
-
   return slices;
 }

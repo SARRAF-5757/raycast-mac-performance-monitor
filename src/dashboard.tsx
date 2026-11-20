@@ -1,6 +1,21 @@
+/**
+ * Dashboard command: the panels chosen in the extension preferences, drawn as
+ * cards two per row, with warning pills above them when something is wrong.
+ */
+
 import { Action, ActionPanel, Detail, getPreferenceValues, Icon, Keyboard } from "@raycast/api";
+import { OpenMonitorAction } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
-import { DashboardPreferences } from "./data/types";
+import { metricValue, SortMetric } from "./data/queries";
+import {
+  AppGroup,
+  CoreUsage,
+  DashboardPreferences,
+  SystemHistoryPoint,
+  SystemSnapshot,
+  WorkloadSlices,
+} from "./data/types";
+import { gpuWorkloadSlices, totalWorkload } from "./gpu";
 import { useLiveStats } from "./hooks/useLiveStats";
 import {
   generateAreaChart,
@@ -9,215 +24,204 @@ import {
   generateMiniLeaderboardCard,
   generateStackedBar,
   generateWarningPills,
+  LeaderboardItem,
   renderCardRow,
   WarningPill,
 } from "./utils/charts";
-import { openApp } from "./utils/deepLink";
-import { formatBytes, formatPercent, formatTemp } from "./utils/formatting";
+import { formatBytes, formatPercent, formatRate, formatTemp } from "./utils/formatting";
+import { memorySlices, memorySubtitle, pressureColor } from "./utils/memory";
 
-export default function Command() {
-  const prefs = getPreferenceValues<DashboardPreferences>();
-  const { snapshot, history, cores, apps, gpuWorkload, isLoading, isInactive } = useLiveStats({
-    sortMetric: "cpu",
-    appLimit: 50,
-  });
+// Card geometry: two cards of CARD_WIDTH plus a gap make one ROW_WIDTH row.
+const CARD_WIDTH = 374;
+const CARD_HEIGHT = 180;
+const ROW_WIDTH = 760;
 
-  if (isLoading && !snapshot) {
-    return <Detail isLoading={true} />;
+/**
+ * Builds the warning pills shown above the cards. Thresholds follow the app's
+ * own bands: memory pressure 34 / 67 (or the kernel's warning / critical level),
+ * thermal state serious or critical, CPU 85%.
+ */
+function buildWarnings(snapshot: SystemSnapshot): WarningPill[] {
+  const warnings: WarningPill[] = [];
+
+  const pressureLabel = "Memory Pressure " + formatPercent(snapshot.pressurePercent);
+  if (snapshot.pressurePercent >= 67 || snapshot.pressureLevel === 4) {
+    warnings.push({ id: "pressure", label: pressureLabel, level: "critical" });
+  } else if (snapshot.pressurePercent >= 34 || snapshot.pressureLevel === 2) {
+    warnings.push({ id: "pressure", label: pressureLabel, level: "warning" });
   }
 
-  if (isInactive) {
-    return <InactiveNotice />;
+  if (snapshot.thermalState === "critical" || snapshot.thermalState === "serious") {
+    warnings.push({ id: "thermals", label: "Thermal throttling: " + snapshot.thermalState, level: "critical" });
+  } else if (snapshot.cpuDieTemp !== null && snapshot.cpuDieTemp >= 85) {
+    warnings.push({ id: "cpu_temp", label: "High CPU Temp " + formatTemp(snapshot.cpuDieTemp), level: "warning" });
   }
 
-  const tick = snapshot?.timestamp ?? Date.now();
-  const sections: string[] = [];
-
-  // Warning pills: if there are any warnings, show up at the very top as small rounded pills (roughly quarter width each)
-  if (snapshot) {
-    const warnings: WarningPill[] = [];
-
-    // 1. Memory Pressure warning / critical
-    if (snapshot.pressurePercent >= 67 || snapshot.pressureLevel >= 3) {
-      warnings.push({
-        id: "pressure",
-        label: `Memory Pressure: ${formatPercent(snapshot.pressurePercent)}`,
-        level: "critical",
-      });
-    } else if (snapshot.pressurePercent >= 34 || snapshot.pressureLevel >= 2) {
-      warnings.push({
-        id: "pressure",
-        label: `Memory Pressure: ${formatPercent(snapshot.pressurePercent)}`,
-        level: "warning",
-      });
-    }
-
-    // 2. Thermals warning / throttling
-    if (snapshot.thermalState === "critical" || snapshot.thermalState === "serious") {
-      warnings.push({
-        id: "thermals",
-        label: `Throttling: ${snapshot.thermalState}`,
-        level: "critical",
-      });
-    } else if (snapshot.cpuDieTemp !== null && snapshot.cpuDieTemp >= 85) {
-      warnings.push({
-        id: "cpu_temp",
-        label: `High CPU Temp: ${formatTemp(snapshot.cpuDieTemp)}`,
-        level: "warning",
-      });
-    }
-
-    // 3. CPU Load
-    if (snapshot.cpuLoad >= 0.85) {
-      warnings.push({
-        id: "cpu_load",
-        label: `Heavy CPU Load: ${formatPercent(snapshot.cpuLoad * 100)}`,
-        level: "warning",
-      });
-    }
-
-    // 4. Battery Low
-    if (snapshot.batteryPresent && snapshot.batteryCharge <= 20 && !snapshot.batteryCharging) {
-      warnings.push({
-        id: "battery",
-        label: `Low Battery: ${Math.round(snapshot.batteryCharge)}%`,
-        level: "warning",
-      });
-    }
-
-    // 5. App Inactive
-    if (isInactive) {
-      warnings.push({
-        id: "inactive",
-        label: "App Recording Paused",
-        level: "caution",
-      });
-    }
-
-    const warningPillsUri = generateWarningPills(warnings, 760);
-    if (warningPillsUri) {
-      sections.push(`![Warning Pills - ${tick}](${warningPillsUri}?raycast-width=760)`);
-    }
+  if (snapshot.cpuLoad >= 0.85) {
+    warnings.push({
+      id: "cpu_load",
+      label: "Heavy CPU Load " + formatPercent(snapshot.cpuLoad * 100),
+      level: "warning",
+    });
   }
 
-  function getCard(panelId: string): string | null {
-    switch (panelId) {
-      case "memory_pressure": {
-        const pressurePoints = history.map((h) => h.memoryPressure);
-        const pressureColor =
-          (snapshot?.pressurePercent || 0) >= 67
-            ? "#FF453A"
-            : (snapshot?.pressurePercent || 0) >= 34
-              ? "#FF9F0A"
-              : "#0A84FF";
+  if (snapshot.batteryPresent && snapshot.batteryCharge <= 20 && !snapshot.batteryCharging) {
+    warnings.push({
+      id: "battery",
+      label: "Low Battery " + Math.round(snapshot.batteryCharge) + "%",
+      level: "warning",
+    });
+  }
 
-        return generateAreaChart(pressurePoints, {
-          width: 374,
-          height: 180,
+  return warnings;
+}
+
+/** Formats one app's value for a leaderboard card. */
+function formatMetric(app: AppGroup, metric: SortMetric): string {
+  switch (metric) {
+    case "memory":
+      return formatBytes(app.memoryBytes);
+    case "cpu":
+      return formatPercent(app.cpuPercent);
+    case "gpu":
+      return formatPercent(app.gpuPercent);
+    case "disk":
+      return formatRate(app.diskReadBytes + app.diskWrittenBytes);
+    case "energy":
+      return app.energyImpact.toFixed(1);
+  }
+}
+
+/** The top five apps by a metric, skipping apps whose value is zero. */
+function topApps(apps: AppGroup[], metric: SortMetric): LeaderboardItem[] {
+  const sorted = apps.slice();
+  sorted.sort((a, b) => metricValue(b, metric) - metricValue(a, metric));
+
+  const items: LeaderboardItem[] = [];
+  for (const app of sorted) {
+    if (items.length === 5 || metricValue(app, metric) <= 0) {
+      break;
+    }
+    items.push({ name: app.appName, value: formatMetric(app, metric) });
+  }
+  return items;
+}
+
+/** Everything a card might need to draw itself. */
+interface CardData {
+  snapshot: SystemSnapshot;
+  history: SystemHistoryPoint[];
+  cores: CoreUsage[];
+  apps: AppGroup[];
+  gpuWorkload: WorkloadSlices;
+}
+
+/** Draws one half-width card for a panel id, or null when the panel has nothing to show. */
+function renderCard(panelId: string, data: CardData): string | null {
+  const history = data.history;
+
+  switch (panelId) {
+    case "memory_pressure":
+      return generateAreaChart(
+        history.map((h) => h.memoryPressure),
+        {
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
           label: "Memory Pressure",
-          color: pressureColor,
+          color: pressureColor(data.snapshot.pressurePercent),
           unit: "%",
           maxValue: 100,
-          idPrefix: "mem_pressure",
-        });
-      }
+          idPrefix: "mem",
+        },
+      );
 
-      case "memory_composition": {
-        if (!snapshot) return null;
-        const totalRam = snapshot.totalRam || 1;
-        const slices = [
-          { label: "Wired", value: snapshot.wiredRam, color: "#FF375F" },
-          { label: "Active", value: snapshot.activeRam, color: "#0A84FF" },
-          { label: "Compressed", value: snapshot.compressedRam, color: "#FF9F0A" },
-          { label: "Cached", value: snapshot.cachedFiles, color: "#5E5CE6" },
-          { label: "Free", value: snapshot.freeRam, color: "#30D158" },
-        ];
-        const swapSubtitle =
-          snapshot.swapUsed > 0 ? `Swap: ${formatBytes(snapshot.swapUsed)}` : `Total ${formatBytes(totalRam)}`;
-        return generateStackedBar(slices, totalRam, "Memory Composition Breakdown", 374, 180, swapSubtitle);
-      }
+    case "memory_composition":
+      return generateStackedBar(
+        memorySlices(data.snapshot),
+        data.snapshot.totalRam,
+        "Memory",
+        CARD_WIDTH,
+        CARD_HEIGHT,
+        memorySubtitle(data.snapshot),
+      );
 
-      case "cpu_usage": {
-        const cpuPoints = history.map((h) => h.cpuPercent);
-        return generateAreaChart(cpuPoints, {
-          width: 374,
-          height: 180,
+    case "cpu_usage":
+      return generateAreaChart(
+        history.map((h) => h.cpuPercent),
+        {
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
           label: "CPU Usage",
           color: "#BF5AF2",
           unit: "%",
           maxValue: 100,
-          idPrefix: "cpu_usage",
-        });
-      }
+          idPrefix: "cpu",
+        },
+      );
 
-      case "cpu_cores": {
-        return cores.length > 0 ? generateCoreGrid(cores, 374, 180) : null;
+    case "cpu_cores":
+      if (data.cores.length === 0) {
+        return null;
       }
+      return generateCoreGrid(data.cores, CARD_WIDTH, CARD_HEIGHT);
 
-      case "gpu_usage": {
-        const gpuPoints = history.map((h) => h.gpuPercent);
-        return generateAreaChart(gpuPoints, {
-          width: 374,
-          height: 180,
+    case "gpu_usage":
+      return generateAreaChart(
+        history.map((h) => h.gpuPercent),
+        {
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
           label: "GPU Usage",
           color: "#30D158",
           unit: "%",
           maxValue: 100,
-          idPrefix: "gpu_usage",
-        });
-      }
+          idPrefix: "gpu",
+        },
+      );
 
-      case "gpu_breakdown": {
-        const totalGpu = gpuWorkload.aiMl + gpuWorkload.displayUi + gpuWorkload.media + gpuWorkload.other;
-        const validTotalGpu = totalGpu > 0 ? totalGpu : 100;
-        const gpuSlices = [
-          { label: "AI & ML", value: gpuWorkload.aiMl, color: "#BF5AF2", formatted: `${gpuWorkload.aiMl.toFixed(1)}%` },
-          {
-            label: "Display/UI",
-            value: gpuWorkload.displayUi,
-            color: "#0A84FF",
-            formatted: `${gpuWorkload.displayUi.toFixed(1)}%`,
-          },
-          { label: "Media", value: gpuWorkload.media, color: "#FF9F0A", formatted: `${gpuWorkload.media.toFixed(1)}%` },
-          { label: "Other", value: gpuWorkload.other, color: "#8E8E93", formatted: `${gpuWorkload.other.toFixed(1)}%` },
-        ];
-        return generateStackedBar(gpuSlices, validTotalGpu, "GPU Usage Breakdown", 374, 180);
-      }
+    case "gpu_breakdown": {
+      const total = totalWorkload(data.gpuWorkload);
+      const subtitle = total > 0 ? formatPercent(total) + " across apps" : "GPU idle";
+      return generateStackedBar(
+        gpuWorkloadSlices(data.gpuWorkload),
+        total > 0 ? total : 1,
+        "GPU by Workload",
+        CARD_WIDTH,
+        CARD_HEIGHT,
+        subtitle,
+      );
+    }
 
-      case "disk_io": {
-        const readPoints = history.map((h) => h.diskReadMb);
-        const writePoints = history.map((h) => h.diskWriteMb);
-        return generateDualAreaChart(readPoints, writePoints, {
-          width: 374,
-          height: 180,
-          title: "Disk Read & Write Records",
+    case "disk_io":
+      return generateDualAreaChart(
+        history.map((h) => h.diskReadMb),
+        history.map((h) => h.diskWriteMb),
+        {
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
+          title: "Disk Throughput",
           labelA: "Read",
           labelB: "Write",
           colorA: "#64D2FF",
           colorB: "#FF9F0A",
           unit: "MB/s",
-          idPrefix: "disk_io",
-        });
-      }
+          idPrefix: "disk",
+        },
+      );
 
-      case "power_consumption": {
-        const powerPoints = history.map((h) => h.batteryWatts);
-        return generateAreaChart(powerPoints, {
-          width: 374,
-          height: 180,
-          label: "Power Consumption",
-          color: "#FFD60A",
-          unit: "W",
-          idPrefix: "power_consumption",
-        });
-      }
+    case "power_consumption":
+      return generateAreaChart(
+        history.map((h) => h.powerWatts),
+        { width: CARD_WIDTH, height: CARD_HEIGHT, label: "Power Draw", color: "#FFD60A", unit: "W", idPrefix: "power" },
+      );
 
-      case "thermals": {
-        const cpuTemps = history.map((h) => h.cpuTemp || 0);
-        const gpuTemps = history.map((h) => h.gpuTemp || 0);
-        return generateDualAreaChart(cpuTemps, gpuTemps, {
-          width: 374,
-          height: 180,
+    case "thermals":
+      return generateDualAreaChart(
+        history.map((h) => h.cpuTemp),
+        history.map((h) => h.gpuTemp),
+        {
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
           title: "Thermals",
           labelA: "CPU Die",
           labelB: "GPU Die",
@@ -225,106 +229,121 @@ export default function Command() {
           colorB: "#FF9F0A",
           unit: "°C",
           idPrefix: "thermals",
-        });
-      }
+        },
+      );
 
-      case "top_memory": {
-        if (apps.length === 0) return null;
-        const topMemApps = [...apps]
-          .sort((a, b) => b.memoryBytes - a.memoryBytes)
-          .slice(0, 5)
-          .map((a) => ({ name: a.appName, value: formatBytes(a.memoryBytes) }));
-        return generateMiniLeaderboardCard("Top Memory Users", topMemApps, "#0A84FF", 374, 180);
-      }
+    case "top_memory":
+      return generateMiniLeaderboardCard(
+        "Top Memory",
+        topApps(data.apps, "memory"),
+        "#0A84FF",
+        CARD_WIDTH,
+        CARD_HEIGHT,
+      );
+    case "top_cpu":
+      return generateMiniLeaderboardCard("Top CPU", topApps(data.apps, "cpu"), "#BF5AF2", CARD_WIDTH, CARD_HEIGHT);
+    case "top_gpu":
+      return generateMiniLeaderboardCard("Top GPU", topApps(data.apps, "gpu"), "#30D158", CARD_WIDTH, CARD_HEIGHT);
+    case "top_disk":
+      return generateMiniLeaderboardCard("Top Disk", topApps(data.apps, "disk"), "#64D2FF", CARD_WIDTH, CARD_HEIGHT);
+    case "top_energy":
+      return generateMiniLeaderboardCard(
+        "Top Energy",
+        topApps(data.apps, "energy"),
+        "#FFD60A",
+        CARD_WIDTH,
+        CARD_HEIGHT,
+      );
 
-      case "top_cpu": {
-        if (apps.length === 0) return null;
-        const topCpuApps = [...apps]
-          .sort((a, b) => b.cpuPercent - a.cpuPercent)
-          .slice(0, 5)
-          .map((a) => ({ name: a.appName, value: formatPercent(a.cpuPercent) }));
-        return generateMiniLeaderboardCard("Top CPU Users", topCpuApps, "#BF5AF2", 374, 180);
-      }
-
-      case "top_gpu": {
-        if (apps.length === 0) return null;
-        const topGpuApps = [...apps]
-          .filter((a) => a.gpuPercent > 0)
-          .sort((a, b) => b.gpuPercent - a.gpuPercent)
-          .slice(0, 5)
-          .map((a) => ({ name: a.appName, value: formatPercent(a.gpuPercent) }));
-        return generateMiniLeaderboardCard("Top GPU Users", topGpuApps, "#30D158", 374, 180);
-      }
-
-      case "top_energy": {
-        if (apps.length === 0) return null;
-        const topEnergyApps = [...apps]
-          .sort((a, b) => b.energyImpact - a.energyImpact)
-          .slice(0, 5)
-          .map((a) => ({ name: a.appName, value: a.energyImpact.toFixed(1) }));
-        return generateMiniLeaderboardCard("Top Energy Users", topEnergyApps, "#FFD60A", 374, 180);
-      }
-
-      default:
-        return null;
-    }
+    default:
+      // "none" or an unknown id: leave the slot empty.
+      return null;
   }
+}
 
-  // 14 customizable slot dropdowns, defaulting to all available panels
-  const slotList: string[] = [
-    prefs.slot1 ?? "memory_pressure",
-    prefs.slot2 ?? "memory_composition",
-    prefs.slot3 ?? "cpu_usage",
-    prefs.slot4 ?? "cpu_cores",
-    prefs.slot5 ?? "gpu_usage",
-    prefs.slot6 ?? "gpu_breakdown",
-    prefs.slot7 ?? "disk_io",
-    prefs.slot8 ?? "power_consumption",
-    prefs.slot9 ?? "thermals",
-    prefs.slot10 ?? "none",
-    prefs.slot11 ?? "top_memory",
-    prefs.slot12 ?? "top_cpu",
-    prefs.slot13 ?? "top_gpu",
-    prefs.slot14 ?? "top_energy",
+/** Reads the 14 slot preferences in order. Raycast fills in the defaults from package.json. */
+function readSlots(prefs: DashboardPreferences): string[] {
+  const slots = [
+    prefs.slot1,
+    prefs.slot2,
+    prefs.slot3,
+    prefs.slot4,
+    prefs.slot5,
+    prefs.slot6,
+    prefs.slot7,
+    prefs.slot8,
+    prefs.slot9,
+    prefs.slot10,
+    prefs.slot11,
+    prefs.slot12,
+    prefs.slot13,
+    prefs.slot14,
   ];
 
+  const result: string[] = [];
+  for (const slot of slots) {
+    result.push(slot === undefined ? "none" : slot);
+  }
+  return result;
+}
+
+export default function Command() {
+  const prefs = getPreferenceValues<DashboardPreferences>();
+  const stats = useLiveStats({ sortMetric: "cpu" });
+  const snapshot = stats.snapshot;
+
+  if (stats.isLoading && snapshot === null) {
+    return <Detail isLoading />;
+  }
+  if (!stats.isAppRunning || snapshot === null) {
+    return <InactiveNotice />;
+  }
+
+  const data: CardData = {
+    snapshot: snapshot,
+    history: stats.history,
+    cores: stats.cores,
+    apps: stats.apps,
+    gpuWorkload: stats.gpuWorkload,
+  };
+  const tick = snapshot.timestamp;
+  const sections: string[] = [];
+
+  const pills = generateWarningPills(buildWarnings(snapshot), ROW_WIDTH);
+  if (pills !== null) {
+    sections.push("![Warnings - " + tick + "](" + pills + "?raycast-width=" + ROW_WIDTH + ")");
+  }
+
+  // Walk the slots two at a time; each pair becomes one row image.
+  const slots = readSlots(prefs);
   let rowCount = 0;
-
-  for (let i = 0; i < slotList.length; i += 2) {
-    const leftId = slotList[i];
-    const rightId = slotList[i + 1];
-
-    const leftCard = leftId && leftId !== "none" ? getCard(leftId) : null;
-    const rightCard = rightId && rightId !== "none" ? getCard(rightId) : null;
-
-    if (!leftCard && !rightCard) {
+  for (let i = 0; i < slots.length; i += 2) {
+    const leftCard = renderCard(slots[i], data);
+    const rightCard = renderCard(slots[i + 1], data);
+    if (leftCard === null && rightCard === null) {
       continue;
     }
-
-    rowCount++;
-    const rowUri = renderCardRow(leftCard || "", rightCard || null, 760, 180);
-    sections.push(`![Dashboard Row ${rowCount} - ${tick}](${rowUri}?raycast-width=760)`);
+    rowCount += 1;
+    const row = renderCardRow(leftCard === null ? "" : leftCard, rightCard, ROW_WIDTH, CARD_HEIGHT);
+    sections.push("![Row " + rowCount + " - " + tick + "](" + row + "?raycast-width=" + ROW_WIDTH + ")");
   }
 
   if (rowCount === 0) {
-    sections.push(
-      "### No Dashboard Panels Selected\n\nOpen Raycast Extension Preferences to assign performance panels to slots.",
-    );
+    sections.push("### No dashboard panels selected\n\nOpen the extension preferences to assign panels to slots.");
   }
-
-  const markdown = sections.join("\n\n");
 
   return (
     <Detail
-      isLoading={isLoading}
-      markdown={markdown}
+      isLoading={stats.isLoading}
+      markdown={sections.join("\n\n")}
       actions={
         <ActionPanel>
+          <OpenMonitorAction />
           <Action
-            title="Open Mac Performance Monitor"
-            icon={Icon.AppWindow}
-            shortcut={Keyboard.Shortcut.Common.Open}
-            onAction={openApp}
+            title="Refresh Now"
+            icon={Icon.ArrowClockwise}
+            shortcut={Keyboard.Shortcut.Common.Refresh}
+            onAction={stats.refresh}
           />
         </ActionPanel>
       }

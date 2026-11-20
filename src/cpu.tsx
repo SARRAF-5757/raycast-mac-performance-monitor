@@ -1,109 +1,115 @@
-import { Action, ActionPanel, Color, Icon, Keyboard, List } from "@raycast/api";
+/**
+ * CPU command: usage history, per-core grid, and every running app sorted by CPU.
+ * App CPU is in percent of one core (so it can exceed 100); the detail pane also
+ * shows the share of the whole Mac.
+ */
+ 
+import { Color, Icon, List } from "@raycast/api";
+import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
-import { SubprocessList } from "./components/SubprocessList";
-import { TimeRange } from "./data/types";
+import { RangeDropdown } from "./components/RangeDropdown";
+import { AppGroup, SystemSnapshot } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateCoreGrid } from "./utils/charts";
-import { openApp } from "./utils/deepLink";
 import { formatPercent } from "./utils/formatting";
 
-export default function Command() {
-  const { snapshot, history, range, setRange, cores, apps, isLoading, isInactive } = useLiveStats({
-    sortMetric: "cpu",
-    appLimit: 40,
-  });
-
-  if (isLoading && !snapshot) {
-    return <List isLoading={true} searchBarPlaceholder="Loading CPU telemetry..." />;
+/** Red when the app uses more than one full core, orange above 30 percent of one core. */
+function cpuTagColor(cpuPercent: number): Color {
+  if (cpuPercent > 100) {
+    return Color.Red;
   }
+  if (cpuPercent > 30) {
+    return Color.Orange;
+  }
+  return Color.Purple;
+}
 
-  if (isInactive) {
+export default function Command() {
+  const stats = useLiveStats({ sortMetric: "cpu" });
+  const snapshot = stats.snapshot;
+
+  if (stats.isLoading && snapshot === null) {
+    return <List isLoading searchBarPlaceholder="Loading CPU telemetry..." />;
+  }
+  if (!stats.isAppRunning || snapshot === null) {
     return <InactiveNotice />;
   }
 
-  const cpuPoints = history.map((h) => h.cpuPercent);
-  const cpuChartUri = generateAreaChart(cpuPoints, {
-    label: "CPU Usage",
-    color: "#BF5AF2",
-    unit: "%",
-    maxValue: 100,
-  });
+  // The topology loads in the same tick as the first snapshot, so it is set by now.
+  let coreCount = 0;
+  if (stats.topology !== null) {
+    coreCount = stats.topology.cpuCores;
+  }
 
-  const coreGridUri = cores.length > 0 ? generateCoreGrid(cores) : null;
-
-  const tick = snapshot?.timestamp ?? Date.now();
-  const markdownHeader = `
-![CPU Usage - ${tick}](${cpuChartUri}?raycast-width=760)
-
-${coreGridUri ? `![CPU Cores - ${tick}](${coreGridUri}?raycast-width=760)` : ""}
-  `.trim();
+  const cpuValues = stats.history.map((point) => point.cpuPercent);
+  const cpuChart = generateAreaChart(cpuValues, { label: "CPU Usage", color: "#BF5AF2", unit: "%", maxValue: 100 });
+  const tick = snapshot.timestamp;
+  let markdown = "![CPU Usage - " + tick + "](" + cpuChart + "?raycast-width=760)";
+  if (stats.cores.length > 0) {
+    const coreGrid = generateCoreGrid(stats.cores);
+    markdown += "\n\n![CPU Cores - " + tick + "](" + coreGrid + "?raycast-width=760)";
+  }
 
   return (
     <List
-      isLoading={isLoading}
+      isLoading={stats.isLoading}
       isShowingDetail
-      searchBarPlaceholder="Filter apps by CPU usage..."
-      searchBarAccessory={
-        <List.Dropdown tooltip="History Window" value={range} onChange={(newVal) => setRange(newVal as TimeRange)}>
-          <List.Dropdown.Item title="Last 5 Minutes" value="5m" />
-          <List.Dropdown.Item title="Last 15 Minutes" value="15m" />
-          <List.Dropdown.Item title="Last 30 Minutes" value="30m" />
-          <List.Dropdown.Item title="Last 1 Hour" value="1h" />
-          <List.Dropdown.Item title="Last 6 Hours" value="6h" />
-          <List.Dropdown.Item title="Last 24 Hours" value="24h" />
-        </List.Dropdown>
-      }
+      searchBarPlaceholder="Filter apps by name..."
+      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
     >
-      <List.Section title={`Active Applications (${apps.length})`}>
-        {apps.map((app) => {
-          return (
-            <List.Item
-              key={app.appName}
-              title={app.appName}
-              icon={Icon.ComputerChip}
-              accessories={[
-                { text: `${formatPercent(app.cpuPercent)}`, tooltip: "Total CPU Percentage across subprocesses" },
-                { text: `${app.processCount} proc`, tooltip: "Processes in App Coalition" },
-              ]}
-              detail={
-                <List.Item.Detail
-                  markdown={markdownHeader}
-                  metadata={
-                    <List.Item.Detail.Metadata>
-                      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
-                      <List.Item.Detail.Metadata.TagList title="CPU Usage">
-                        <List.Item.Detail.Metadata.TagList.Item
-                          text={formatPercent(app.cpuPercent)}
-                          color={app.cpuPercent > 50 ? Color.Red : app.cpuPercent > 20 ? Color.Orange : Color.Purple}
-                        />
-                      </List.Item.Detail.Metadata.TagList>
-                      <List.Item.Detail.Metadata.Label title="Processes" text={`${app.processCount} active`} />
-                      {app.executablePath ? (
-                        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
-                      ) : null}
-                    </List.Item.Detail.Metadata>
-                  }
-                />
-              }
-              actions={
-                <ActionPanel>
-                  <Action.Push
-                    title="Inspect Subprocesses"
-                    icon={Icon.List}
-                    target={<SubprocessList appName={app.appName} />}
-                  />
-                  <Action
-                    title="Open Mac Performance Monitor"
-                    icon={Icon.AppWindow}
-                    shortcut={Keyboard.Shortcut.Common.Open}
-                    onAction={openApp}
-                  />
-                </ActionPanel>
-              }
-            />
-          );
-        })}
+      <List.Section title="Applications by CPU" subtitle={String(stats.apps.length)}>
+        {stats.apps.map((app) => (
+          <List.Item
+            key={app.appName}
+            title={app.appName}
+            icon={Icon.ComputerChip}
+            accessories={[
+              { text: formatPercent(app.cpuPercent), tooltip: "CPU, percent of one core" },
+              { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
+            ]}
+            detail={
+              <List.Item.Detail
+                markdown={markdown}
+                metadata={<AppMetadata app={app} snapshot={snapshot} coreCount={coreCount} />}
+              />
+            }
+            actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
+          />
+        ))}
       </List.Section>
     </List>
+  );
+}
+
+interface AppMetadataProps {
+  app: AppGroup;
+  snapshot: SystemSnapshot;
+  coreCount: number;
+}
+
+function AppMetadata(props: AppMetadataProps) {
+  const app = props.app;
+  const snapshot = props.snapshot;
+
+  let systemText = formatPercent(snapshot.cpuLoad * 100);
+  if (snapshot.load1 !== null) {
+    systemText += " · load " + snapshot.load1.toFixed(2);
+  }
+
+  return (
+    <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.TagList title="CPU (one core = 100%)">
+        <List.Item.Detail.Metadata.TagList.Item
+          text={formatPercent(app.cpuPercent)}
+          color={cpuTagColor(app.cpuPercent)}
+        />
+      </List.Item.Detail.Metadata.TagList>
+      <List.Item.Detail.Metadata.Label title="Share of Mac" text={formatPercent(app.cpuPercent / props.coreCount)} />
+      <List.Item.Detail.Metadata.Label title="Energy Impact" text={app.energyImpact.toFixed(1)} />
+      <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
+      <List.Item.Detail.Metadata.Separator />
+      <List.Item.Detail.Metadata.Label title="System" text={systemText} />
+      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+    </List.Item.Detail.Metadata>
   );
 }
