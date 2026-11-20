@@ -144,8 +144,6 @@ export interface DashboardPreferences {
   slot10?: string;
   slot11?: string;
   slot12?: string;
-  slot13?: string;
-  slot14?: string;
 }
 
 /**

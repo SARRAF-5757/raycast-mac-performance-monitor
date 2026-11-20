@@ -545,7 +545,7 @@ export function generateDualAreaChart(
   const width = options.width || 760;
   const height = options.height || 180;
   const isCompact = width <= 400;
-  const paddingLeft = isCompact ? 46 : 55;
+  const paddingLeft = isCompact ? 54 : 55;
   const paddingRight = 16;
   const paddingTop = 36;
   const paddingBottom = 24;

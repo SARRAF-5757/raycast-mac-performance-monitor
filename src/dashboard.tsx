@@ -231,7 +231,7 @@ function renderCard(panelId: string, data: CardData): string | null {
   }
 }
 
-/** Reads the 14 slot preferences in order. Raycast fills in the defaults from package.json. */
+/** Reads the 12 slot preferences in order. Raycast fills in the defaults from package.json. */
 function readSlots(prefs: DashboardPreferences): string[] {
   const slots = [
     prefs.slot1,
@@ -246,8 +246,6 @@ function readSlots(prefs: DashboardPreferences): string[] {
     prefs.slot10,
     prefs.slot11,
     prefs.slot12,
-    prefs.slot13,
-    prefs.slot14,
   ];
 
   const result: string[] = [];

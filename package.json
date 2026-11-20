@@ -16,7 +16,7 @@
   "commands": [
     {
       "name": "dashboard",
-      "title": "Dashboard",
+      "title": "Performance Dashboard",
       "subtitle": "Quick view of your favorite panels",
       "description": "Consolidated view of panels selected from all categories (CPU, Memory, etc)",
       "mode": "view",
@@ -781,35 +781,35 @@
     },
     {
       "name": "memory",
-      "title": "Memory",
+      "title": "Memory Stats",
       "subtitle": "View everything related to memory",
       "description": "Shows memory pressure, composition, and apps sorted by RAM usage",
       "mode": "view"
     },
     {
       "name": "cpu",
-      "title": "CPU",
+      "title": "CPU Stats",
       "subtitle": "View everything related to the CPU",
-      "description": "Shows core grid, total CPU graph, and apps sorted by CPU usage",
+      "description": "Shows the CPU usage graph and apps sorted by CPU usage",
       "mode": "view"
     },
     {
       "name": "gpu",
-      "title": "GPU",
+      "title": "GPU Stats",
       "subtitle": "View everything related to the GPU",
-      "description": "Shows GPU graphs, usage category breakdown, and apps sorted by GPU usage",
+      "description": "Shows the GPU usage graph and the apps using the GPU",
       "mode": "view"
     },
     {
       "name": "disk",
-      "title": "Disk",
+      "title": "Disk Stats",
       "subtitle": "View everything related to disk read/writes",
       "description": "Shows read/write throughput graphs and apps sorted by disk I/O",
       "mode": "view"
     },
     {
       "name": "energy",
-      "title": "Energy",
+      "title": "Power & Thermals Stats",
       "subtitle": "View everything related to power usage & thermals",
       "description": "Shows power consumption, thermals, and apps sorted by energy impact",
       "mode": "view"
@@ -894,8 +894,7 @@
   ],
   "tools": [],
   "dependencies": {
-    "@raycast/api": "^2.11.1",
-    "@raycast/utils": "^2.2.7"
+    "@raycast/api": "^2.11.1"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.2.0",
