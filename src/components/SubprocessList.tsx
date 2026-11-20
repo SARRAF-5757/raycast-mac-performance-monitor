@@ -3,14 +3,41 @@
  * Refreshes on the same cadence as the main views and offers per-process actions.
  */
 
-import { Action, ActionPanel, Color, getPreferenceValues, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Clipboard,
+  Color,
+  getPreferenceValues,
+  Icon,
+  Keyboard,
+  List,
+  showInFinder,
+  showToast,
+  Toast,
+} from "@raycast/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAppSubprocesses } from "../data/queries";
 import { GlobalPreferences, SubprocessItem } from "../data/types";
 import { cadenceToMs } from "../hooks/useLiveStats";
 import { formatBytes, formatPercent, formatRate } from "../utils/formatting";
 import { killProcess } from "../utils/processControl";
-import { copyWithToast, OpenMonitorAction, RefreshAction, revealPath } from "./Actions";
+import { OpenMonitorAction } from "./Actions";
+
+/** Copies text to the clipboard and confirms with a toast. */
+async function copyWithToast(text: string, toastTitle: string): Promise<void> {
+  await Clipboard.copy(text);
+  await showToast({ style: Toast.Style.Success, title: toastTitle });
+}
+
+/** Shows a file in Finder, with a toast if it no longer exists. */
+async function revealPath(path: string): Promise<void> {
+  try {
+    await showInFinder(path);
+  } catch {
+    await showToast({ style: Toast.Style.Failure, title: "Could not reveal in Finder" });
+  }
+}
 
 interface SubprocessListProps {
   appName: string;
@@ -49,7 +76,7 @@ export function SubprocessList(props: SubprocessListProps) {
         timer = setTimeout(tick, cadenceMs);
       }
     };
-    
+
     tick();
 
     return () => {
@@ -154,7 +181,6 @@ function ProcessRow(props: ProcessRowProps) {
               />
             )}
             <OpenMonitorAction />
-            <RefreshAction onRefresh={props.onRefresh} />
           </ActionPanel.Section>
           <ActionPanel.Section title="Process">
             <Action

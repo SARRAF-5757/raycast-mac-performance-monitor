@@ -46,16 +46,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -117,16 +109,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -188,16 +172,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -239,7 +215,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 4 (Right)",
-          "default": "cpu_cores",
+          "default": "gpu_usage",
           "description": "Select panel for Row 2, Right",
           "data": [
             {
@@ -259,16 +235,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -310,7 +278,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 5 (Left)",
-          "default": "gpu_usage",
+          "default": "disk_io",
           "description": "Select panel for Row 3, Left",
           "data": [
             {
@@ -330,16 +298,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -381,7 +341,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 6 (Right)",
-          "default": "gpu_breakdown",
+          "default": "power_consumption",
           "description": "Select panel for Row 3, Right",
           "data": [
             {
@@ -401,16 +361,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -452,7 +404,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 7 (Left)",
-          "default": "disk_io",
+          "default": "thermals",
           "description": "Select panel for Row 4, Left",
           "data": [
             {
@@ -472,16 +424,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -523,7 +467,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 8 (Right)",
-          "default": "power_consumption",
+          "default": "none",
           "description": "Select panel for Row 4, Right",
           "data": [
             {
@@ -543,16 +487,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -594,7 +530,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 9 (Left)",
-          "default": "thermals",
+          "default": "top_memory",
           "description": "Select panel for Row 5, Left",
           "data": [
             {
@@ -614,16 +550,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -665,7 +593,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 10 (Right)",
-          "default": "none",
+          "default": "top_cpu",
           "description": "Select panel for Row 5, Right",
           "data": [
             {
@@ -685,16 +613,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -736,7 +656,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 11 (Left)",
-          "default": "top_memory",
+          "default": "top_gpu",
           "description": "Select panel for Row 6, Left",
           "data": [
             {
@@ -756,16 +676,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -807,7 +719,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 12 (Right)",
-          "default": "top_cpu",
+          "default": "top_energy",
           "description": "Select panel for Row 6, Right",
           "data": [
             {
@@ -827,16 +739,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -878,7 +782,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 13 (Left)",
-          "default": "top_gpu",
+          "default": "none",
           "description": "Select panel for Row 7, Left",
           "data": [
             {
@@ -898,16 +802,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -949,7 +845,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 14 (Right)",
-          "default": "top_energy",
+          "default": "none",
           "description": "Select panel for Row 7, Right",
           "data": [
             {
@@ -969,16 +865,8 @@
               "value": "cpu_usage"
             },
             {
-              "title": "CPU Cores",
-              "value": "cpu_cores"
-            },
-            {
               "title": "GPU Usage",
               "value": "gpu_usage"
-            },
-            {
-              "title": "GPU Usage Breakdown",
-              "value": "gpu_breakdown"
             },
             {
               "title": "Disk Read & Write Records",
@@ -1084,14 +972,6 @@
         {
           "title": "Last 1 Hour",
           "value": "1h"
-        },
-        {
-          "title": "Last 6 Hours",
-          "value": "6h"
-        },
-        {
-          "title": "Last 24 Hours",
-          "value": "24h"
         }
       ]
     },

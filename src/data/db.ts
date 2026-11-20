@@ -38,6 +38,6 @@ export async function querySqlite<T>(sql: string): Promise<T[]> {
   if (result.stdout.trim().length === 0) {
     return [];
   }
-  
+
   return JSON.parse(result.stdout) as T[];
 }

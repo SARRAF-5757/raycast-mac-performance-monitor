@@ -1,16 +1,16 @@
 /**
- * Energy command: system power draw and die temperatures over time, battery and
- * thermal state, and every running app sorted by energy impact.
+ * Energy command: system power draw and die temperatures over time, and every
+ * running app sorted by energy impact.
  */
 
 import { Color, Icon, List } from "@raycast/api";
 import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { RangeDropdown } from "./components/RangeDropdown";
-import { AppGroup, SystemSnapshot } from "./data/types";
+import { AppGroup } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateDualAreaChart } from "./utils/charts";
-import { formatPercent, formatTemp, formatWatts } from "./utils/formatting";
+import { formatPercent } from "./utils/formatting";
 
 /** Energy impact uses Activity Monitor's scale: red above 25, orange above 10. */
 function energyTagColor(energyImpact: number): Color {
@@ -21,16 +21,6 @@ function energyTagColor(energyImpact: number): Color {
     return Color.Orange;
   }
   return Color.Yellow;
-}
-
-function thermalTagColor(thermalState: string): Color {
-  if (thermalState === "critical") {
-    return Color.Red;
-  }
-  if (thermalState === "serious") {
-    return Color.Orange;
-  }
-  return Color.Green;
 }
 
 export default function Command() {
@@ -88,7 +78,7 @@ export default function Command() {
               { text: app.energyImpact.toFixed(1), tooltip: "Energy impact (Activity Monitor scale)" },
               { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
             ]}
-            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} snapshot={snapshot} />} />}
+            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} />} />}
             actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
           />
         ))}
@@ -99,30 +89,14 @@ export default function Command() {
 
 interface AppMetadataProps {
   app: AppGroup;
-  snapshot: SystemSnapshot;
 }
 
 function AppMetadata(props: AppMetadataProps) {
   const app = props.app;
-  const snapshot = props.snapshot;
-
-  let batteryText = "No battery";
-  if (snapshot.batteryPresent) {
-    batteryText = Math.round(snapshot.batteryCharge) + "%";
-    if (snapshot.batteryCharging) {
-      batteryText += " charging";
-    }
-    batteryText += " · health " + Math.round(snapshot.batteryHealth) + "%";
-  }
-
-  // The app records no fan reading on fanless Macs.
-  let fanText = "No fan";
-  if (snapshot.fanRpm !== null) {
-    fanText = Math.round(snapshot.fanRpm) + " RPM";
-  }
 
   return (
     <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
       <List.Item.Detail.Metadata.TagList title="Energy Impact">
         <List.Item.Detail.Metadata.TagList.Item
           text={app.energyImpact.toFixed(1)}
@@ -132,21 +106,9 @@ function AppMetadata(props: AppMetadataProps) {
       <List.Item.Detail.Metadata.Label title="CPU" text={formatPercent(app.cpuPercent)} />
       <List.Item.Detail.Metadata.Label title="GPU" text={formatPercent(app.gpuPercent)} />
       <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
-      <List.Item.Detail.Metadata.Separator />
-      <List.Item.Detail.Metadata.Label title="System Power" text={formatWatts(snapshot.systemPowerWatts)} />
-      <List.Item.Detail.Metadata.Label title="Battery" text={batteryText} />
-      <List.Item.Detail.Metadata.Label
-        title="Temperatures"
-        text={"CPU " + formatTemp(snapshot.cpuDieTemp) + " · GPU " + formatTemp(snapshot.gpuDieTemp)}
-      />
-      <List.Item.Detail.Metadata.Label title="Fan" text={fanText} />
-      <List.Item.Detail.Metadata.TagList title="Thermal State">
-        <List.Item.Detail.Metadata.TagList.Item
-          text={snapshot.thermalState}
-          color={thermalTagColor(snapshot.thermalState)}
-        />
-      </List.Item.Detail.Metadata.TagList>
-      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+      {app.executablePath !== null && (
+        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
+      )}
     </List.Item.Detail.Metadata>
   );
 }

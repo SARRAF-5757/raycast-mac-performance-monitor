@@ -1,11 +1,11 @@
 /**
  * Every query the extension runs against the Mac Performance Monitor database,
  * plus the in-memory steps that turn raw rows into what the views show
- * (grouping processes into apps, sorting, workload classification).
+ * (grouping processes into apps, sorting).
  *
  * Facts about the database that shaped this file:
  * - Raw per-second rows (`system_samples`, `process_samples`) are kept for about
- *   two hours. Older history lives in `system_minute` as one-minute averages.
+ *   two hours, which covers every chart range.
  * - A process row is written only when its numbers changed, or on a heartbeat
  *   once per `minute_bucket_seconds` (stored in the `meta` table).
  * - `disk_read` / `disk_written` per process are lifetime totals, not rates.
@@ -14,20 +14,9 @@
  */
 
 import { execFile } from "child_process";
-import os from "os";
 import { promisify } from "util";
 import { querySqlite } from "./db";
-import {
-  AppGroup,
-  CoreUsage,
-  MacTopology,
-  SubprocessItem,
-  SystemHistoryPoint,
-  SystemSnapshot,
-  TimeRange,
-  WorkloadCategory,
-  WorkloadSlices,
-} from "./types";
+import { AppGroup, SubprocessItem, SystemHistoryPoint, SystemSnapshot, TimeRange } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -53,22 +42,11 @@ interface RawSystemSample {
   pressure_level: number;
   pressure_percent: number;
   cpu_load: number;
-  load_1: number | null;
-  disk_read: number;
-  disk_write: number;
-  boot_free: number | null;
-  boot_total: number | null;
-  gpu_util: number | null;
-  gpu_power: number | null;
   cpu_die: number | null;
-  gpu_die: number | null;
-  fan_rpm: number | null;
   thermal_state: number | null;
   battery_present: number;
   battery_charge: number;
   battery_charging: number;
-  battery_health: number;
-  energy_power: number | null;
 }
 
 /** Maps the app's thermal state code onto a name. NULL means it was not read. */
@@ -91,9 +69,8 @@ function parseThermalState(code: number | null): string {
 export async function getLatestSnapshot(): Promise<SystemSnapshot | null> {
   const sql = `
     SELECT timestamp, total_ram, free, wired, compressed, app_memory, cached_files, swap_used,
-      pressure_level, pressure_percent, cpu_load, load_1, disk_read, disk_write, boot_free, boot_total,
-      gpu_util, gpu_power, cpu_die, gpu_die, fan_rpm, thermal_state,
-      battery_present, battery_charge, battery_charging, battery_health, energy_power
+      pressure_level, pressure_percent, cpu_load, cpu_die, thermal_state,
+      battery_present, battery_charge, battery_charging
     FROM system_samples
     ORDER BY timestamp DESC
     LIMIT 1;
@@ -116,22 +93,11 @@ export async function getLatestSnapshot(): Promise<SystemSnapshot | null> {
     pressureLevel: r.pressure_level,
     pressurePercent: r.pressure_percent,
     cpuLoad: r.cpu_load,
-    load1: r.load_1,
-    diskRead: r.disk_read,
-    diskWrite: r.disk_write,
-    bootFree: r.boot_free,
-    bootTotal: r.boot_total,
-    gpuUtil: r.gpu_util,
-    gpuPower: r.gpu_power,
     cpuDieTemp: r.cpu_die,
-    gpuDieTemp: r.gpu_die,
-    fanRpm: r.fan_rpm,
     thermalState: parseThermalState(r.thermal_state),
     batteryPresent: r.battery_present === 1,
     batteryCharge: r.battery_charge,
     batteryCharging: r.battery_charging === 1,
-    batteryHealth: r.battery_health,
-    systemPowerWatts: r.energy_power,
   };
 }
 
@@ -139,8 +105,8 @@ export async function getLatestSnapshot(): Promise<SystemSnapshot | null> {
 // System history (for the charts)
 // ---------------------------------------------------------------------------
 
-/** Converts a time range token like "15m" or "6h" into seconds. */
-export function rangeToSeconds(range: TimeRange): number {
+/** Converts a time range token like "15m" or "1h" into seconds. */
+function rangeToSeconds(range: TimeRange): number {
   switch (range) {
     case "5m":
       return 300;
@@ -150,10 +116,6 @@ export function rangeToSeconds(range: TimeRange): number {
       return 1800;
     case "1h":
       return 3600;
-    case "6h":
-      return 21600;
-    case "24h":
-      return 86400;
   }
 }
 
@@ -185,56 +147,29 @@ function missingAsZero(value: number | null): number {
 }
 
 /**
- * Loads the history for a time range as evenly spaced points.
- *
+ * Loads the history for a time range from the raw `system_samples` table.
  * The window is cut into buckets of `bucketSeconds` and each bucket holds the
- * average of the samples inside it. Two tables feed the result:
- * - `system_samples` (raw, per second) for everything inside the raw retention window.
- * - `system_minute` (one-minute averages) for anything older than the oldest raw row.
- * Without the second table a 24-hour chart would only show the last two hours.
+ * average of the samples inside it.
  */
 export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryPoint[]> {
   const windowSeconds = rangeToSeconds(range);
   const bucketSeconds = Math.max(1, Math.round(windowSeconds / HISTORY_TARGET_POINTS));
 
-  // "anchor" finds the newest and oldest raw timestamps once; both parts below use them.
+  // CAST(timestamp / N AS INT) * N rounds each timestamp down to the start of its bucket.
   const sql = `
-    WITH anchor AS (
-      SELECT max(timestamp) AS max_ts, min(timestamp) AS min_ts FROM system_samples
-    ),
-    live AS (
-      SELECT
-        CAST(timestamp / ${bucketSeconds} AS INT) * ${bucketSeconds} AS bucket,
-        avg(cpu_load * 100) AS cpu_percent,
-        avg(pressure_percent) AS memory_pressure,
-        avg(gpu_util) AS gpu_percent,
-        avg(disk_read) / 1048576.0 AS disk_read_mb,
-        avg(disk_write) / 1048576.0 AS disk_write_mb,
-        avg(cpu_die) AS cpu_temp,
-        avg(gpu_die) AS gpu_temp,
-        avg(energy_power) AS power_watts
-      FROM system_samples, anchor
-      WHERE timestamp >= max_ts - ${windowSeconds}
-      GROUP BY 1
-    ),
-    archive AS (
-      SELECT
-        CAST(bucket / ${bucketSeconds} AS INT) * ${bucketSeconds} AS bucket,
-        avg(cpu_avg * 100) AS cpu_percent,
-        avg(pressure_avg) AS memory_pressure,
-        avg(gpu_util_avg) AS gpu_percent,
-        avg(disk_read_avg) / 1048576.0 AS disk_read_mb,
-        avg(disk_write_avg) / 1048576.0 AS disk_write_mb,
-        avg(cpu_die_avg) AS cpu_temp,
-        avg(gpu_die_avg) AS gpu_temp,
-        avg(energy_power) AS power_watts
-      FROM system_minute, anchor
-      WHERE bucket >= max_ts - ${windowSeconds} AND bucket < min_ts
-      GROUP BY 1
-    )
-    SELECT * FROM archive
-    UNION ALL
-    SELECT * FROM live
+    SELECT
+      CAST(timestamp / ${bucketSeconds} AS INT) * ${bucketSeconds} AS bucket,
+      avg(cpu_load * 100) AS cpu_percent,
+      avg(pressure_percent) AS memory_pressure,
+      avg(gpu_util) AS gpu_percent,
+      avg(disk_read) / 1048576.0 AS disk_read_mb,
+      avg(disk_write) / 1048576.0 AS disk_write_mb,
+      avg(cpu_die) AS cpu_temp,
+      avg(gpu_die) AS gpu_temp,
+      avg(energy_power) AS power_watts
+    FROM system_samples
+    WHERE timestamp >= (SELECT MAX(timestamp) FROM system_samples) - ${windowSeconds}
+    GROUP BY bucket
     ORDER BY bucket ASC;
   `;
 
@@ -675,216 +610,4 @@ export async function getAppSubprocesses(appName: string): Promise<SubprocessIte
 
   items.sort((a, b) => b.memoryBytes - a.memoryBytes);
   return items;
-}
-
-// ---------------------------------------------------------------------------
-// Hardware topology and per-core CPU usage
-// ---------------------------------------------------------------------------
-
-interface RawMetaRow {
-  key: string;
-  value: number;
-}
-
-/** Reads this Mac's core counts from the `meta` table, where the app records them. */
-export async function getMacTopology(): Promise<MacTopology> {
-  const rows = await querySqlite<RawMetaRow>("SELECT key, value FROM meta WHERE key LIKE 'agent.%';");
-
-  const topology: MacTopology = { cpuCores: 0, performanceCores: 0, efficiencyCores: 0 };
-  for (const row of rows) {
-    if (row.key === "agent.cpu_cores") {
-      topology.cpuCores = row.value;
-    } else if (row.key === "agent.performance_cores") {
-      topology.performanceCores = row.value;
-    } else if (row.key === "agent.efficiency_cores") {
-      topology.efficiencyCores = row.value;
-    }
-  }
-  return topology;
-}
-
-/** Accumulated CPU time counters for one core, as reported by os.cpus(). */
-interface CoreTimes {
-  user: number;
-  nice: number;
-  sys: number;
-  idle: number;
-}
-
-// The counters from the previous call. Usage is the change since then.
-let previousCoreTimes: CoreTimes[] | null = null;
-
-/**
- * Measures per-core utilization as the change in CPU time counters since the
- * previous call. The first call only records a baseline and reports zero usage.
- *
- * Core kinds: on Apple Silicon the kernel numbers the efficiency cores first,
- * so the first `efficiencyCores` indices are E-cores and the rest are P-cores.
- */
-export function sampleCoreUsage(topology: MacTopology): CoreUsage[] {
-  const cpus = os.cpus();
-
-  const currentTimes: CoreTimes[] = [];
-  for (const cpu of cpus) {
-    currentTimes.push({ user: cpu.times.user, nice: cpu.times.nice, sys: cpu.times.sys, idle: cpu.times.idle });
-  }
-
-  const previous = previousCoreTimes;
-  previousCoreTimes = currentTimes;
-
-  const result: CoreUsage[] = [];
-  for (let i = 0; i < cpus.length; i++) {
-    let kind: "performance" | "efficiency" = "performance";
-    if (i < topology.efficiencyCores) {
-      kind = "efficiency";
-    }
-
-    let usage = 0;
-    if (previous !== null) {
-      const now = currentTimes[i];
-      const before = previous[i];
-      const busy = now.user - before.user + (now.nice - before.nice) + (now.sys - before.sys);
-      const total = busy + (now.idle - before.idle);
-      // total is 0 when two calls land in the same clock tick.
-      if (total > 0) {
-        usage = Math.round((busy / total) * 100);
-      }
-    }
-
-    result.push({ index: i, kind: kind, usage: usage });
-  }
-  return result;
-}
-
-// ---------------------------------------------------------------------------
-// Workload classification (same marker lists as GPUWorkload.swift in the app)
-// ---------------------------------------------------------------------------
-
-const AI_MARKERS = [
-  "ollama",
-  "llama-server",
-  "llama-cli",
-  "llama.cpp",
-  "llamafile",
-  "lm studio",
-  "lmstudio",
-  "/lms",
-  "mlx_lm",
-  "mlx-lm",
-  "mlx.",
-  "/mlx",
-  "koboldcpp",
-  "gpt4all",
-  "jan.ai",
-  "text-generation-webui",
-  "vllm",
-  "comfyui",
-  "draw things",
-  "drawthings",
-  "diffusionbee",
-  "stable diffusion",
-  "invokeai",
-  "whisper",
-  "anecompilerservice",
-  "aned",
-  "coremlservice",
-  "com.apple.coreml",
-  "mediaanalysisd",
-  "photoanalysisd",
-  "intelligenceplatform",
-  "generativeexperiences",
-  "generativefunctions",
-  "privatecloudcompute",
-  "siriinference",
-];
-
-const MEDIA_MARKERS = [
-  "vtdecoderxpcservice",
-  "vtencoderxpcservice",
-  "videotoolbox",
-  "avconferenced",
-  "replayd",
-  "screen sharing",
-  "screensharing",
-  "screencaptureui",
-  "quicktime",
-  "final cut",
-  "compressor",
-  "imovie",
-  "handbrake",
-  "obs",
-  "zoom.us",
-  "com.microsoft.teams",
-  "facetime",
-  "photos.app",
-  "photolibraryd",
-];
-
-const DISPLAY_MARKERS = [
-  "windowserver",
-  "dock",
-  "systemuiserver",
-  "controlcenter",
-  "notificationcenter",
-  "wallpaper",
-  "helper (gpu)",
-  "helper (renderer)",
-  "com.apple.webkit.gpu",
-  "webkit.gpu",
-  "gpu process",
-  "finder",
-  "spotlight",
-  "loginwindow",
-  "accessibilityui",
-];
-
-/** True when any marker appears in the text. */
-function containsAny(text: string, markers: string[]): boolean {
-  for (const marker of markers) {
-    if (text.includes(marker)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Puts a process or app into a workload category by looking for known names in
- * its name, bundle id and path.
- */
-export function classifyProcessWorkload(
-  name: string,
-  bundleId: string | null,
-  executablePath: string | null,
-): WorkloadCategory {
-  let text = name.toLowerCase();
-  if (bundleId !== null) {
-    text += " " + bundleId.toLowerCase();
-  }
-  if (executablePath !== null) {
-    text += " " + executablePath.toLowerCase();
-  }
-  if (containsAny(text, AI_MARKERS)) {
-    return "aiMl";
-  }
-  if (containsAny(text, MEDIA_MARKERS)) {
-    return "media";
-  }
-  if (containsAny(text, DISPLAY_MARKERS)) {
-    return "displayUi";
-  }
-  return "other";
-}
-
-/** Adds up GPU percent per workload category. Pure: no I/O. */
-export function computeGpuWorkload(apps: AppGroup[]): WorkloadSlices {
-  const slices: WorkloadSlices = { aiMl: 0, displayUi: 0, media: 0, other: 0 };
-  for (const app of apps) {
-    if (app.gpuPercent <= 0) {
-      continue;
-    }
-    const category = classifyProcessWorkload(app.appName, app.bundleId, app.executablePath);
-    slices[category] += app.gpuPercent;
-  }
-  return slices;
 }

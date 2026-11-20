@@ -3,7 +3,7 @@
  * A field is `number | null` when its database column is nullable: the app
  * writes NULL when that reading was not taken.
  */
- 
+
 export interface SystemSnapshot {
   /** Timestamp in seconds (Unix epoch). */
   timestamp: number;
@@ -27,26 +27,8 @@ export interface SystemSnapshot {
   pressurePercent: number;
   /** Overall CPU utilization as a fraction (0 to 1). */
   cpuLoad: number;
-  /** 1-minute system load average. */
-  load1: number | null;
-  /** Disk read throughput in bytes per second. */
-  diskRead: number;
-  /** Disk write throughput in bytes per second. */
-  diskWrite: number;
-  /** Free space on boot volume in bytes. */
-  bootFree: number | null;
-  /** Total space on boot volume in bytes. */
-  bootTotal: number | null;
-  /** GPU utilization percentage (0 to 100). */
-  gpuUtil: number | null;
-  /** GPU power draw in watts. */
-  gpuPower: number | null;
   /** CPU die temperature in degrees Celsius. */
   cpuDieTemp: number | null;
-  /** GPU die temperature in degrees Celsius. */
-  gpuDieTemp: number | null;
-  /** Fastest fan speed in RPM. NULL on fanless Macs. */
-  fanRpm: number | null;
   /** Thermal pressure state name (nominal, fair, serious, critical, or unknown when not read). */
   thermalState: string;
   /** Whether an internal battery is present. */
@@ -55,15 +37,10 @@ export interface SystemSnapshot {
   batteryCharge: number;
   /** Whether the battery is charging. */
   batteryCharging: boolean;
-  /** Maximum battery capacity percentage relative to design capacity. */
-  batteryHealth: number;
-  /** Whole-system power draw in watts, as estimated by the app. */
-  systemPowerWatts: number | null;
 }
 
 /**
- * One point on the history charts. Points come from the raw tier (seconds) for
- * recent windows and the minute tier for anything older than the raw retention window.
+ * One point on the history charts: the average of the raw samples in one bucket.
  * Readings that were not taken are 0 here, so the chart shows them as a drop.
  */
 export interface SystemHistoryPoint {
@@ -147,33 +124,9 @@ export interface SubprocessItem {
 }
 
 /**
- * Instantaneous CPU core utilization sample.
- */
-export interface CoreUsage {
-  /** Zero-based logical core index. */
-  index: number;
-  /** Core classification: performance or efficiency. */
-  kind: "performance" | "efficiency";
-  /** Current utilization percentage (0 to 100). */
-  usage: number;
-}
-
-/**
- * Hardware topology and core configuration for the host Mac.
- */
-export interface MacTopology {
-  /** Total number of logical CPU cores. */
-  cpuCores: number;
-  /** Number of high-performance cores (P-cores). */
-  performanceCores: number;
-  /** Number of energy-efficient cores (E-cores). */
-  efficiencyCores: number;
-}
-
-/**
  * Supported time range windows for querying historical trends and telemetry.
  */
-export type TimeRange = "5m" | "15m" | "30m" | "1h" | "6h" | "24h";
+export type TimeRange = "5m" | "15m" | "30m" | "1h";
 
 /**
  * Raycast user preferences configuring which panels occupy each dashboard card slot.
@@ -204,14 +157,3 @@ export interface GlobalPreferences {
   /** Polling interval cadence for live view updates. */
   refreshCadence?: "1s" | "2s" | "5s";
 }
-
-/**
- * Workload category keys shared by GPU and disk breakdowns.
- */
-export type WorkloadCategory = "aiMl" | "displayUi" | "media" | "other";
-
-/**
- * Workload distribution across categories. Values are in the metric's own unit
- * (percent for GPU, bytes per second for disk).
- */
-export type WorkloadSlices = Record<WorkloadCategory, number>;

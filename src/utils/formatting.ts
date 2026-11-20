@@ -21,25 +21,11 @@ export function formatRate(bytesPerSecond: number): string {
 }
 
 /** Formats a percentage (85.43 -> "85.4%"). */
-export function formatPercent(value: number | null, decimals = 1): string {
-  if (value === null) {
-    return "N/A";
-  }
+export function formatPercent(value: number, decimals = 1): string {
   return value.toFixed(decimals) + "%";
 }
 
-/** Formats electrical power ("12.4 W"). */
-export function formatWatts(watts: number | null): string {
-  if (watts === null) {
-    return "N/A";
-  }
-  return watts.toFixed(1) + " W";
-}
-
 /** Formats a temperature ("54°C"). */
-export function formatTemp(celsius: number | null): string {
-  if (celsius === null) {
-    return "N/A";
-  }
+export function formatTemp(celsius: number): string {
   return Math.round(celsius) + "°C";
 }

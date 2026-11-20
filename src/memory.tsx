@@ -7,10 +7,10 @@ import { Color, Icon, List } from "@raycast/api";
 import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { RangeDropdown } from "./components/RangeDropdown";
-import { AppGroup, SystemSnapshot } from "./data/types";
+import { AppGroup } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateAreaChart, generateStackedBar } from "./utils/charts";
-import { formatBytes, formatPercent } from "./utils/formatting";
+import { formatBytes } from "./utils/formatting";
 import { memorySlices, memorySubtitle, pressureColor } from "./utils/memory";
 
 const ONE_GB = 1024 * 1024 * 1024;
@@ -53,7 +53,7 @@ export default function Command() {
     90,
     memorySubtitle(snapshot),
   );
-  
+
   // The timestamp in the image title changes every tick, which makes Raycast redraw the image.
   const tick = snapshot.timestamp;
   const markdown =
@@ -85,7 +85,7 @@ export default function Command() {
               { text: formatBytes(app.memoryBytes), tooltip: "Memory footprint across all processes" },
               { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
             ]}
-            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} snapshot={snapshot} />} />}
+            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} />} />}
             actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
           />
         ))}
@@ -96,32 +96,25 @@ export default function Command() {
 
 interface AppMetadataProps {
   app: AppGroup;
-  snapshot: SystemSnapshot;
 }
 
 /** The right-hand metadata column of the detail pane. */
 function AppMetadata(props: AppMetadataProps) {
   const app = props.app;
-  const snapshot = props.snapshot;
-  const shareOfRam = snapshot.totalRam > 0 ? (app.memoryBytes / snapshot.totalRam) * 100 : 0;
 
   return (
     <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
       <List.Item.Detail.Metadata.TagList title="Memory">
         <List.Item.Detail.Metadata.TagList.Item
           text={formatBytes(app.memoryBytes)}
           color={memoryTagColor(app.memoryBytes)}
         />
       </List.Item.Detail.Metadata.TagList>
-      <List.Item.Detail.Metadata.Label title="Share of RAM" text={formatPercent(shareOfRam)} />
-      <List.Item.Detail.Metadata.Label title="CPU" text={formatPercent(app.cpuPercent)} />
       <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
-      <List.Item.Detail.Metadata.Separator />
-      <List.Item.Detail.Metadata.Label
-        title="Pressure"
-        text={formatPercent(snapshot.pressurePercent) + " · swap " + formatBytes(snapshot.swapUsed)}
-      />
-      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+      {app.executablePath !== null && (
+        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
+      )}
     </List.Item.Detail.Metadata>
   );
 }

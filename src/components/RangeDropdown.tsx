@@ -15,8 +15,6 @@ const RANGE_OPTIONS: RangeOption[] = [
   { value: "15m", title: "Last 15 Minutes" },
   { value: "30m", title: "Last 30 Minutes" },
   { value: "1h", title: "Last 1 Hour" },
-  { value: "6h", title: "Last 6 Hours" },
-  { value: "24h", title: "Last 24 Hours" },
 ];
 
 interface RangeDropdownProps {

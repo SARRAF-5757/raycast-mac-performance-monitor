@@ -7,12 +7,10 @@ import { Color, Icon, List } from "@raycast/api";
 import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { RangeDropdown } from "./components/RangeDropdown";
-import { classifyProcessWorkload } from "./data/queries";
-import { AppGroup, SystemSnapshot } from "./data/types";
+import { AppGroup } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import { generateDualAreaChart } from "./utils/charts";
-import { formatBytes, formatRate } from "./utils/formatting";
-import { workloadColor, workloadLabel } from "./utils/workload";
+import { formatRate } from "./utils/formatting";
 
 const ONE_MB = 1024 * 1024;
 
@@ -61,31 +59,21 @@ export default function Command() {
       searchBarPlaceholder="Filter apps by name..."
       searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
     >
-      <List.EmptyView
-        icon={Icon.HardDrive}
-        title="No app is reading or writing the disk right now"
-        description={
-          "System: " + formatRate(snapshot.diskRead) + " read, " + formatRate(snapshot.diskWrite) + " write."
-        }
-      />
+      <List.EmptyView icon={Icon.HardDrive} title="No app is reading or writing the disk right now" />
       <List.Section title="Applications by Disk Activity" subtitle={String(diskApps.length)}>
-        {diskApps.map((app) => {
-          const total = app.diskReadBytes + app.diskWrittenBytes;
-          const category = classifyProcessWorkload(app.appName, app.bundleId, app.executablePath);
-          return (
-            <List.Item
-              key={app.appName}
-              title={app.appName}
-              icon={Icon.HardDrive}
-              accessories={[
-                { text: formatRate(total), tooltip: "Read + write rate over the last minute" },
-                { tag: { value: workloadLabel(category), color: workloadColor(category) }, tooltip: "Workload" },
-              ]}
-              detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} snapshot={snapshot} />} />}
-              actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
-            />
-          );
-        })}
+        {diskApps.map((app) => (
+          <List.Item
+            key={app.appName}
+            title={app.appName}
+            icon={Icon.HardDrive}
+            accessories={[
+              { text: formatRate(app.diskReadBytes + app.diskWrittenBytes), tooltip: "Read + write rate" },
+              { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
+            ]}
+            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} />} />}
+            actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
+          />
+        ))}
       </List.Section>
     </List>
   );
@@ -93,35 +81,24 @@ export default function Command() {
 
 interface AppMetadataProps {
   app: AppGroup;
-  snapshot: SystemSnapshot;
 }
 
 function AppMetadata(props: AppMetadataProps) {
   const app = props.app;
-  const snapshot = props.snapshot;
   const total = app.diskReadBytes + app.diskWrittenBytes;
-
-  let startupDiskText = "N/A";
-  if (snapshot.bootFree !== null && snapshot.bootTotal !== null) {
-    const freePercent = (snapshot.bootFree / snapshot.bootTotal) * 100;
-    startupDiskText = formatBytes(snapshot.bootFree) + " free (" + freePercent.toFixed(0) + "%)";
-  }
 
   return (
     <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
       <List.Item.Detail.Metadata.TagList title="Disk Rate">
         <List.Item.Detail.Metadata.TagList.Item text={formatRate(total)} color={diskTagColor(total)} />
       </List.Item.Detail.Metadata.TagList>
       <List.Item.Detail.Metadata.Label title="Reading" text={formatRate(app.diskReadBytes)} />
       <List.Item.Detail.Metadata.Label title="Writing" text={formatRate(app.diskWrittenBytes)} />
       <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
-      <List.Item.Detail.Metadata.Separator />
-      <List.Item.Detail.Metadata.Label
-        title="System"
-        text={formatRate(snapshot.diskRead) + " read · " + formatRate(snapshot.diskWrite) + " write"}
-      />
-      <List.Item.Detail.Metadata.Label title="Startup Disk" text={startupDiskText} />
-      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+      {app.executablePath !== null && (
+        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
+      )}
     </List.Item.Detail.Metadata>
   );
 }

@@ -1,16 +1,15 @@
 /**
- * CPU command: usage history, per-core grid, and every running app sorted by CPU.
- * App CPU is in percent of one core (so it can exceed 100); the detail pane also
- * shows the share of the whole Mac.
+ * CPU command: usage history and every running app sorted by CPU.
+ * App CPU is in percent of one core, so it can exceed 100.
  */
- 
+
 import { Color, Icon, List } from "@raycast/api";
 import { AppGroupActions } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { RangeDropdown } from "./components/RangeDropdown";
-import { AppGroup, SystemSnapshot } from "./data/types";
+import { AppGroup } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
-import { generateAreaChart, generateCoreGrid } from "./utils/charts";
+import { generateAreaChart } from "./utils/charts";
 import { formatPercent } from "./utils/formatting";
 
 /** Red when the app uses more than one full core, orange above 30 percent of one core. */
@@ -35,20 +34,10 @@ export default function Command() {
     return <InactiveNotice />;
   }
 
-  // The topology loads in the same tick as the first snapshot, so it is set by now.
-  let coreCount = 0;
-  if (stats.topology !== null) {
-    coreCount = stats.topology.cpuCores;
-  }
-
   const cpuValues = stats.history.map((point) => point.cpuPercent);
   const cpuChart = generateAreaChart(cpuValues, { label: "CPU Usage", color: "#BF5AF2", unit: "%", maxValue: 100 });
   const tick = snapshot.timestamp;
-  let markdown = "![CPU Usage - " + tick + "](" + cpuChart + "?raycast-width=760)";
-  if (stats.cores.length > 0) {
-    const coreGrid = generateCoreGrid(stats.cores);
-    markdown += "\n\n![CPU Cores - " + tick + "](" + coreGrid + "?raycast-width=760)";
-  }
+  const markdown = "![CPU Usage - " + tick + "](" + cpuChart + "?raycast-width=760)";
 
   return (
     <List
@@ -67,12 +56,7 @@ export default function Command() {
               { text: formatPercent(app.cpuPercent), tooltip: "CPU, percent of one core" },
               { text: String(app.processCount), icon: Icon.Layers, tooltip: "Processes" },
             ]}
-            detail={
-              <List.Item.Detail
-                markdown={markdown}
-                metadata={<AppMetadata app={app} snapshot={snapshot} coreCount={coreCount} />}
-              />
-            }
+            detail={<List.Item.Detail markdown={markdown} metadata={<AppMetadata app={app} />} />}
             actions={<AppGroupActions app={app} onRefresh={stats.refresh} />}
           />
         ))}
@@ -83,33 +67,24 @@ export default function Command() {
 
 interface AppMetadataProps {
   app: AppGroup;
-  snapshot: SystemSnapshot;
-  coreCount: number;
 }
 
 function AppMetadata(props: AppMetadataProps) {
   const app = props.app;
-  const snapshot = props.snapshot;
-
-  let systemText = formatPercent(snapshot.cpuLoad * 100);
-  if (snapshot.load1 !== null) {
-    systemText += " · load " + snapshot.load1.toFixed(2);
-  }
 
   return (
     <List.Item.Detail.Metadata>
+      <List.Item.Detail.Metadata.Label title="App Name" text={app.appName} />
       <List.Item.Detail.Metadata.TagList title="CPU (one core = 100%)">
         <List.Item.Detail.Metadata.TagList.Item
           text={formatPercent(app.cpuPercent)}
           color={cpuTagColor(app.cpuPercent)}
         />
       </List.Item.Detail.Metadata.TagList>
-      <List.Item.Detail.Metadata.Label title="Share of Mac" text={formatPercent(app.cpuPercent / props.coreCount)} />
-      <List.Item.Detail.Metadata.Label title="Energy Impact" text={app.energyImpact.toFixed(1)} />
       <List.Item.Detail.Metadata.Label title="Processes" text={String(app.processCount)} />
-      <List.Item.Detail.Metadata.Separator />
-      <List.Item.Detail.Metadata.Label title="System" text={systemText} />
-      {app.executablePath !== null && <List.Item.Detail.Metadata.Label title="Executable" text={app.executablePath} />}
+      {app.executablePath !== null && (
+        <List.Item.Detail.Metadata.Label title="Executable Path" text={app.executablePath} />
+      )}
     </List.Item.Detail.Metadata>
   );
 }

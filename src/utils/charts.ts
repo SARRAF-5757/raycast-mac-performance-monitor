@@ -8,7 +8,6 @@
  */
 
 import { environment } from "@raycast/api";
-import { CoreUsage } from "../data/types";
 import { formatBytes } from "./formatting";
 
 /**
@@ -686,96 +685,8 @@ export function generateDualAreaChart(
 }
 
 /**
- * Generates an interactive-style CPU core usage grid displaying per-core progress bars
- * and utilization percentages, grouped by Performance (P) and Efficiency (E) core clusters.
- *
- * @param cores Array of sampled CoreUsage items.
- * @param width Card width in pixels (default: 760).
- * @param height Card height in pixels (default: 180).
- * @returns Base64 SVG data URI.
- */
-export function generateCoreGrid(cores: CoreUsage[], width = 760, height = 180): string {
-  const theme = getTheme();
-  const pCores = cores.filter((c) => c.kind === "performance");
-  const eCores = cores.filter((c) => c.kind === "efficiency");
-
-  // Present Performance cluster first, then Efficiency cluster (matching the header)
-  const orderedCores = eCores.length > 0 ? [...pCores, ...eCores] : cores;
-
-  const isCompact = width <= 400;
-  const colCount = isCompact ? 4 : Math.min(8, Math.max(4, Math.ceil(orderedCores.length / 2)));
-  const padding = 16;
-  const availWidth = width - padding * 2;
-  const gap = isCompact ? 6 : 8;
-  const colWidth = Math.floor((availWidth - gap * (colCount - 1)) / colCount);
-  const rowHeight = isCompact ? 28 : 44;
-  const startY = isCompact ? 36 : 38;
-
-  const renderCoreBar = (core: CoreUsage, x: number, y: number) => {
-    const isP = core.kind === "performance";
-    const color = isP ? theme.cpu : theme.gpu;
-    const labelPrefix = isP ? "P" : "E";
-
-    // Number cores within their cluster (P0..P3, E0..E3). E-cores come first in
-    // the kernel's numbering, so a P-core's cluster index is offset by the E-core count.
-    let clusterIndex = core.index;
-    if (isP && eCores.length > 0 && core.index >= eCores.length) {
-      clusterIndex = core.index - eCores.length;
-    }
-    const coreLabel = `${labelPrefix}${clusterIndex}`;
-    const fillWidth = Math.max(3, Math.round(((colWidth - (isCompact ? 12 : 16)) * core.usage) / 100));
-
-    if (isCompact) {
-      return `
-        <g transform="translate(${x}, ${y})">
-          <rect width="${colWidth}" height="${rowHeight}" rx="5" fill="${theme.cardSubBg}" stroke="${theme.cardSubBorder}" stroke-width="1"/>
-          <text x="6" y="12" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="600">${coreLabel}</text>
-          <text x="${colWidth - 6}" y="12" fill="${theme.textPrimary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700" text-anchor="end">${core.usage}%</text>
-          <rect x="6" y="17" width="${colWidth - 12}" height="4" rx="2" fill="${theme.trackBg}"/>
-          <rect x="6" y="17" width="${fillWidth}" height="4" rx="2" fill="${color}"/>
-        </g>
-      `;
-    }
-
-    return `
-      <g transform="translate(${x}, ${y})">
-        <rect width="${colWidth}" height="36" rx="6" fill="${theme.cardSubBg}" stroke="${theme.cardSubBorder}" stroke-width="1"/>
-        <text x="8" y="16" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">${coreLabel}</text>
-        <text x="${colWidth - 8}" y="16" fill="${theme.textPrimary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700" text-anchor="end">${core.usage}%</text>
-        <rect x="8" y="24" width="${colWidth - 16}" height="5" rx="2.5" fill="${theme.trackBg}"/>
-        <rect x="8" y="24" width="${fillWidth}" height="5" rx="2.5" fill="${color}"/>
-      </g>
-    `;
-  };
-
-  const coreNodes: string[] = [];
-  for (let i = 0; i < orderedCores.length; i++) {
-    const row = Math.floor(i / colCount);
-    const col = i % colCount;
-    const x = padding + col * (colWidth + gap);
-    const y = startY + row * (rowHeight + (isCompact ? 4 : 0));
-    coreNodes.push(renderCoreBar(orderedCores[i], x, y));
-  }
-
-  const titleSubtitle = eCores.length > 0 ? `${pCores.length}P + ${eCores.length}E` : `${pCores.length} Cores`;
-
-  const svg = `
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${width}" height="${height}" rx="10" fill="${theme.cardBg}" stroke="${theme.cardBorder}" stroke-width="1"/>
-
-  <text x="16" y="22" fill="${theme.textSecondary}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600">CPU Cores</text>
-  <text x="${width - 16}" y="22" fill="${theme.textMuted}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" text-anchor="end">${titleSubtitle}</text>
-
-  ${coreNodes.join("\n")}
-</svg>
-  `.trim();
-
-  return svgToDataUri(svg);
-}
-
-/**
  * Generates a proportional multi-colored stacked progress bar card with legend breakdowns.
- * Used for Memory Composition (App, Wired, Compressed, Cached, Free) and Disk/GPU workload slices.
+ * Used for Memory Composition (App, Wired, Compressed, Cached, Free).
  *
  * @param slices Array of proportioned segment definitions with labels and colors.
  * @param total Total quantity representing 100% width.

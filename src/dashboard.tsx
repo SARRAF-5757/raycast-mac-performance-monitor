@@ -3,23 +3,14 @@
  * cards two per row, with warning pills above them when something is wrong.
  */
 
-import { Action, ActionPanel, Detail, getPreferenceValues, Icon, Keyboard } from "@raycast/api";
+import { ActionPanel, Detail, getPreferenceValues } from "@raycast/api";
 import { OpenMonitorAction } from "./components/Actions";
 import { InactiveNotice } from "./components/InactiveNotice";
 import { metricValue, SortMetric } from "./data/queries";
-import {
-  AppGroup,
-  CoreUsage,
-  DashboardPreferences,
-  SystemHistoryPoint,
-  SystemSnapshot,
-  WorkloadSlices,
-} from "./data/types";
-import { gpuWorkloadSlices, totalWorkload } from "./gpu";
+import { AppGroup, DashboardPreferences, SystemHistoryPoint, SystemSnapshot } from "./data/types";
 import { useLiveStats } from "./hooks/useLiveStats";
 import {
   generateAreaChart,
-  generateCoreGrid,
   generateDualAreaChart,
   generateMiniLeaderboardCard,
   generateStackedBar,
@@ -111,9 +102,7 @@ function topApps(apps: AppGroup[], metric: SortMetric): LeaderboardItem[] {
 interface CardData {
   snapshot: SystemSnapshot;
   history: SystemHistoryPoint[];
-  cores: CoreUsage[];
   apps: AppGroup[];
-  gpuWorkload: WorkloadSlices;
 }
 
 /** Draws one half-width card for a panel id, or null when the panel has nothing to show. */
@@ -159,12 +148,6 @@ function renderCard(panelId: string, data: CardData): string | null {
         },
       );
 
-    case "cpu_cores":
-      if (data.cores.length === 0) {
-        return null;
-      }
-      return generateCoreGrid(data.cores, CARD_WIDTH, CARD_HEIGHT);
-
     case "gpu_usage":
       return generateAreaChart(
         history.map((h) => h.gpuPercent),
@@ -178,19 +161,6 @@ function renderCard(panelId: string, data: CardData): string | null {
           idPrefix: "gpu",
         },
       );
-
-    case "gpu_breakdown": {
-      const total = totalWorkload(data.gpuWorkload);
-      const subtitle = total > 0 ? formatPercent(total) + " across apps" : "GPU idle";
-      return generateStackedBar(
-        gpuWorkloadSlices(data.gpuWorkload),
-        total > 0 ? total : 1,
-        "GPU by Workload",
-        CARD_WIDTH,
-        CARD_HEIGHT,
-        subtitle,
-      );
-    }
 
     case "disk_io":
       return generateDualAreaChart(
@@ -302,9 +272,7 @@ export default function Command() {
   const data: CardData = {
     snapshot: snapshot,
     history: stats.history,
-    cores: stats.cores,
     apps: stats.apps,
-    gpuWorkload: stats.gpuWorkload,
   };
   const tick = snapshot.timestamp;
   const sections: string[] = [];
@@ -339,12 +307,6 @@ export default function Command() {
       actions={
         <ActionPanel>
           <OpenMonitorAction />
-          <Action
-            title="Refresh Now"
-            icon={Icon.ArrowClockwise}
-            shortcut={Keyboard.Shortcut.Common.Refresh}
-            onAction={stats.refresh}
-          />
         </ActionPanel>
       }
     />
