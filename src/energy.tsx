@@ -66,7 +66,9 @@ export default function Command() {
       isLoading={stats.isLoading}
       isShowingDetail
       searchBarPlaceholder="Filter apps by name..."
-      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
+      searchBarAccessory={
+        <RangeDropdown defaultValue={stats.range} options={stats.availableRanges} onChange={stats.setRange} />
+      }
     >
       <List.Section title="Applications by Energy Impact" subtitle={String(stats.apps.length)}>
         {stats.apps.map((app) => (

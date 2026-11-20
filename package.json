@@ -18,7 +18,7 @@
       "name": "dashboard",
       "title": "Dashboard",
       "subtitle": "Quick view of your favorite panels",
-      "description": "Consolidated view of panels selected from all categories (CPU, Memory, etc). Configurable in extension settings",
+      "description": "Consolidated view of panels selected from all categories (CPU, Memory, etc)",
       "mode": "view",
       "preferences": [
         {
@@ -89,7 +89,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 2 (Right)",
-          "default": "memory_composition",
+          "default": "top_memory",
           "description": "Select panel for Row 1, Right",
           "data": [
             {
@@ -215,7 +215,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 4 (Right)",
-          "default": "gpu_usage",
+          "default": "top_cpu",
           "description": "Select panel for Row 2, Right",
           "data": [
             {
@@ -278,7 +278,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 5 (Left)",
-          "default": "disk_io",
+          "default": "gpu_usage",
           "description": "Select panel for Row 3, Left",
           "data": [
             {
@@ -341,7 +341,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 6 (Right)",
-          "default": "power_consumption",
+          "default": "top_gpu",
           "description": "Select panel for Row 3, Right",
           "data": [
             {
@@ -404,7 +404,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 7 (Left)",
-          "default": "thermals",
+          "default": "power_consumption",
           "description": "Select panel for Row 4, Left",
           "data": [
             {
@@ -467,7 +467,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 8 (Right)",
-          "default": "none",
+          "default": "top_energy",
           "description": "Select panel for Row 4, Right",
           "data": [
             {
@@ -530,7 +530,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 9 (Left)",
-          "default": "top_memory",
+          "default": "disk_io",
           "description": "Select panel for Row 5, Left",
           "data": [
             {
@@ -593,7 +593,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 10 (Right)",
-          "default": "top_cpu",
+          "default": "top_disk",
           "description": "Select panel for Row 5, Right",
           "data": [
             {
@@ -656,7 +656,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 11 (Left)",
-          "default": "top_gpu",
+          "default": "memory_composition",
           "description": "Select panel for Row 6, Left",
           "data": [
             {
@@ -719,7 +719,7 @@
           "type": "dropdown",
           "required": false,
           "label": "Panel 12 (Right)",
-          "default": "top_energy",
+          "default": "thermals",
           "description": "Select panel for Row 6, Right",
           "data": [
             {
@@ -776,132 +776,6 @@
             }
           ],
           "title": "Panel 12 (Right)"
-        },
-        {
-          "name": "slot13",
-          "type": "dropdown",
-          "required": false,
-          "label": "Panel 13 (Left)",
-          "default": "none",
-          "description": "Select panel for Row 7, Left",
-          "data": [
-            {
-              "title": "None",
-              "value": "none"
-            },
-            {
-              "title": "Memory Pressure",
-              "value": "memory_pressure"
-            },
-            {
-              "title": "Memory Composition Breakdown",
-              "value": "memory_composition"
-            },
-            {
-              "title": "CPU Usage",
-              "value": "cpu_usage"
-            },
-            {
-              "title": "GPU Usage",
-              "value": "gpu_usage"
-            },
-            {
-              "title": "Disk Read & Write Records",
-              "value": "disk_io"
-            },
-            {
-              "title": "Power Consumption",
-              "value": "power_consumption"
-            },
-            {
-              "title": "Thermals",
-              "value": "thermals"
-            },
-            {
-              "title": "Top Memory Users",
-              "value": "top_memory"
-            },
-            {
-              "title": "Top CPU Users",
-              "value": "top_cpu"
-            },
-            {
-              "title": "Top GPU Users",
-              "value": "top_gpu"
-            },
-            {
-              "title": "Top Disk Users",
-              "value": "top_disk"
-            },
-            {
-              "title": "Top Energy Users",
-              "value": "top_energy"
-            }
-          ],
-          "title": "Panel 13 (Left)"
-        },
-        {
-          "name": "slot14",
-          "type": "dropdown",
-          "required": false,
-          "label": "Panel 14 (Right)",
-          "default": "none",
-          "description": "Select panel for Row 7, Right",
-          "data": [
-            {
-              "title": "None",
-              "value": "none"
-            },
-            {
-              "title": "Memory Pressure",
-              "value": "memory_pressure"
-            },
-            {
-              "title": "Memory Composition Breakdown",
-              "value": "memory_composition"
-            },
-            {
-              "title": "CPU Usage",
-              "value": "cpu_usage"
-            },
-            {
-              "title": "GPU Usage",
-              "value": "gpu_usage"
-            },
-            {
-              "title": "Disk Read & Write Records",
-              "value": "disk_io"
-            },
-            {
-              "title": "Power Consumption",
-              "value": "power_consumption"
-            },
-            {
-              "title": "Thermals",
-              "value": "thermals"
-            },
-            {
-              "title": "Top Memory Users",
-              "value": "top_memory"
-            },
-            {
-              "title": "Top CPU Users",
-              "value": "top_cpu"
-            },
-            {
-              "title": "Top GPU Users",
-              "value": "top_gpu"
-            },
-            {
-              "title": "Top Disk Users",
-              "value": "top_disk"
-            },
-            {
-              "title": "Top Energy Users",
-              "value": "top_energy"
-            }
-          ],
-          "title": "Panel 14 (Right)"
         }
       ]
     },
@@ -909,7 +783,7 @@
       "name": "memory",
       "title": "Memory",
       "subtitle": "View everything related to memory",
-      "description": "Shows memory pressure, composition, and apps sorted by RAM usage.",
+      "description": "Shows memory pressure, composition, and apps sorted by RAM usage",
       "mode": "view"
     },
     {
@@ -954,8 +828,8 @@
       "type": "dropdown",
       "required": false,
       "title": "Default Time Range",
-      "description": "Time window for graphs on initial view",
-      "default": "15m",
+      "description": "Time window for graphs on initial view. Capped at how long Mac Performance Monitor keeps high-res history. Change 'Settings>Advanced>High Resolution Logging' in Mac Performance Monitor to see more history (upto 2 days)",
+      "default": "30m",
       "data": [
         {
           "title": "Last 5 Minutes",
@@ -972,6 +846,26 @@
         {
           "title": "Last 1 Hour",
           "value": "1h"
+        },
+        {
+          "title": "Last 2 Hours",
+          "value": "2h"
+        },
+        {
+          "title": "Last 6 Hours",
+          "value": "6h"
+        },
+        {
+          "title": "Last 12 Hours",
+          "value": "12h"
+        },
+        {
+          "title": "Last 24 Hours",
+          "value": "24h"
+        },
+        {
+          "title": "Last 48 Hours",
+          "value": "48h"
         }
       ]
     },

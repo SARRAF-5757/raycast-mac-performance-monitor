@@ -57,7 +57,9 @@ export default function Command() {
       isLoading={stats.isLoading}
       isShowingDetail
       searchBarPlaceholder="Filter apps by name..."
-      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
+      searchBarAccessory={
+        <RangeDropdown defaultValue={stats.range} options={stats.availableRanges} onChange={stats.setRange} />
+      }
     >
       <List.EmptyView icon={Icon.HardDrive} title="No app is reading or writing the disk right now" />
       <List.Section title="Applications by Disk Activity" subtitle={String(diskApps.length)}>

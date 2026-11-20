@@ -45,7 +45,9 @@ export default function Command() {
       isLoading={stats.isLoading}
       isShowingDetail
       searchBarPlaceholder="Filter apps by name..."
-      searchBarAccessory={<RangeDropdown value={stats.range} onChange={stats.setRange} />}
+      searchBarAccessory={
+        <RangeDropdown defaultValue={stats.range} options={stats.availableRanges} onChange={stats.setRange} />
+      }
     >
       <List.EmptyView icon={Icon.Eye} title="No app is using the GPU right now" />
       <List.Section title="Applications Using the GPU" subtitle={String(gpuApps.length)}>

@@ -4,8 +4,9 @@
  * (grouping processes into apps, sorting).
  *
  * Facts about the database that shaped this file:
- * - Raw per-second rows (`system_samples`, `process_samples`) are kept for about
- *   two hours, which covers every chart range.
+ * - Raw rows (`system_samples`, `process_samples`) are kept for as long as the
+ *   app's "high-res age" setting says (2 hours by default). The charts read only
+ *   this tier, and only offer ranges that fit inside it.
  * - A process row is written only when its numbers changed, or on a heartbeat
  *   once per `minute_bucket_seconds` (stored in the `meta` table).
  * - `disk_read` / `disk_written` per process are lifetime totals, not rates.
@@ -16,7 +17,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { querySqlite } from "./db";
-import { AppGroup, SubprocessItem, SystemHistoryPoint, SystemSnapshot, TimeRange } from "./types";
+import { AppGroup, SubprocessItem, SystemHistoryPoint, SystemSnapshot } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -105,22 +106,15 @@ export async function getLatestSnapshot(): Promise<SystemSnapshot | null> {
 // System history (for the charts)
 // ---------------------------------------------------------------------------
 
-/** Converts a time range token like "15m" or "1h" into seconds. */
-function rangeToSeconds(range: TimeRange): number {
-  switch (range) {
-    case "5m":
-      return 300;
-    case "15m":
-      return 900;
-    case "30m":
-      return 1800;
-    case "1h":
-      return 3600;
-  }
-}
-
 /** How many points a history query aims for. The charts downsample further to 60. */
 const HISTORY_TARGET_POINTS = 120;
+
+/**
+ * The narrowest chart bucket. With its window closed the app writes a raw sample
+ * about every 10 s whatever its interval setting says, and is sometimes a few
+ * seconds late (up to 17.7 s apart over two hours measured on 2026-11-20).
+ */
+const MIN_BUCKET_SECONDS = 20;
 
 /** One row of the history query below. The nullable columns can average to NULL. */
 interface RawHistoryRow {
@@ -146,14 +140,45 @@ function missingAsZero(value: number | null): number {
   return value;
 }
 
+/** A history point for a bucket that has no samples: everything is 0. */
+function emptyPoint(timestamp: number): SystemHistoryPoint {
+  return {
+    timestamp: timestamp,
+    cpuPercent: 0,
+    memoryPressure: 0,
+    gpuPercent: 0,
+    diskReadMb: 0,
+    diskWriteMb: 0,
+    cpuTemp: 0,
+    gpuTemp: 0,
+    powerWatts: 0,
+  };
+}
+
 /**
- * Loads the history for a time range from the raw `system_samples` table.
- * The window is cut into buckets of `bucketSeconds` and each bucket holds the
- * average of the samples inside it.
+ * Loads the history for a window from the raw `system_samples` table.
+ *
+ * The window is cut into equal buckets that each hold the average of the samples
+ * inside them. Every bucket in the window gets a point, in time order, so the
+ * charts space points by time: a stretch where nothing was recorded (the app was
+ * not running, the Mac was asleep) stays at 0 and shows as a drop.
+ *
+ * Buckets are never narrower than MIN_BUCKET_SECONDS or two of the app's recording
+ * intervals, whichever is longer, so a bucket is only empty when the app really
+ * stopped recording, not just because it was narrower than the time between two samples.
  */
-export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryPoint[]> {
-  const windowSeconds = rangeToSeconds(range);
-  const bucketSeconds = Math.max(1, Math.round(windowSeconds / HISTORY_TARGET_POINTS));
+export async function getSystemHistory(
+  windowSeconds: number,
+  rawIntervalSeconds: number,
+): Promise<SystemHistoryPoint[]> {
+  let bucketSeconds = Math.round(windowSeconds / HISTORY_TARGET_POINTS);
+  if (bucketSeconds < MIN_BUCKET_SECONDS) {
+    bucketSeconds = MIN_BUCKET_SECONDS;
+  }
+  if (bucketSeconds < 2 * rawIntervalSeconds) {
+    bucketSeconds = 2 * rawIntervalSeconds;
+  }
+  const bucketCount = Math.round(windowSeconds / bucketSeconds);
 
   // CAST(timestamp / N AS INT) * N rounds each timestamp down to the start of its bucket.
   const sql = `
@@ -174,10 +199,26 @@ export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryP
   `;
 
   const rows = await querySqlite<RawHistoryRow>(sql);
+  if (rows.length === 0) {
+    return [];
+  }
 
+  // Start with an empty point for every bucket, ending at the newest bucket.
+  const lastBucket = rows[rows.length - 1].bucket;
+  const firstBucket = lastBucket - (bucketCount - 1) * bucketSeconds;
   const points: SystemHistoryPoint[] = [];
+  for (let i = 0; i < bucketCount; i++) {
+    points.push(emptyPoint(firstBucket + i * bucketSeconds));
+  }
+
+  // Then put each recorded bucket into its slot. The query can return one partial
+  // bucket older than the window's first slot; that one is skipped.
   for (const r of rows) {
-    points.push({
+    const index = (r.bucket - firstBucket) / bucketSeconds;
+    if (index < 0) {
+      continue;
+    }
+    points[index] = {
       timestamp: r.bucket,
       cpuPercent: r.cpu_percent,
       memoryPressure: r.memory_pressure,
@@ -187,7 +228,7 @@ export async function getSystemHistory(range: TimeRange): Promise<SystemHistoryP
       cpuTemp: missingAsZero(r.cpu_temp),
       gpuTemp: missingAsZero(r.gpu_temp),
       powerWatts: missingAsZero(r.power_watts),
-    });
+    };
   }
   return points;
 }

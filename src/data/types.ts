@@ -126,7 +126,7 @@ export interface SubprocessItem {
 /**
  * Supported time range windows for querying historical trends and telemetry.
  */
-export type TimeRange = "5m" | "15m" | "30m" | "1h";
+export type TimeRange = "5m" | "15m" | "30m" | "1h" | "2h" | "6h" | "12h" | "24h" | "48h";
 
 /**
  * Raycast user preferences configuring which panels occupy each dashboard card slot.

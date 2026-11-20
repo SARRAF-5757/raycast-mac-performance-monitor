@@ -1,7 +1,8 @@
 /**
  * The one React hook every command uses. It polls the database and hands the views
  * everything they draw: the latest snapshot, the chart history for the selected
- * range, the list of running apps, and whether the MPM app is running.
+ * range, the list of running apps, and whether the MPM app is running. It also
+ * reads the app's recording settings to decide which chart ranges are available.
  */
 
 import { getPreferenceValues, showToast, Toast } from "@raycast/api";
@@ -15,6 +16,8 @@ import {
   sortApps,
   SortMetric,
 } from "../data/queries";
+import { readRecordingSettings, RecordingSettings } from "../data/appSettings";
+import { rangeSeconds, rangesWithin, startingRange } from "../data/ranges";
 import { AppGroup, GlobalPreferences, SystemHistoryPoint, SystemSnapshot, TimeRange } from "../data/types";
 
 /** Converts the "Live Refresh Cadence" preference into milliseconds. */
@@ -39,7 +42,19 @@ export function useLiveStats(options: UseLiveStatsOptions) {
   const cadenceMs = cadenceToMs(prefs.refreshCadence);
   const sortMetric = options.sortMetric;
 
-  const [range, setRange] = useState<TimeRange>(prefs.defaultRange === undefined ? "15m" : prefs.defaultRange);
+  // The app's settings are read once, when the view opens.
+  const settingsRef = useRef<RecordingSettings | null>(null);
+  if (settingsRef.current === null) {
+    settingsRef.current = readRecordingSettings();
+  }
+  const settings = settingsRef.current;
+  const availableRanges = rangesWithin(settings.rawRetentionSeconds);
+
+  let preferredRange: TimeRange = "15m";
+  if (prefs.defaultRange !== undefined) {
+    preferredRange = prefs.defaultRange;
+  }
+  const [range, setRange] = useState<TimeRange>(startingRange(preferredRange, availableRanges));
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [history, setHistory] = useState<SystemHistoryPoint[]>([]);
   const [apps, setApps] = useState<AppGroup[]>([]);
@@ -63,7 +78,7 @@ export function useLiveStats(options: UseLiveStatsOptions) {
       // All four run at the same time; we wait for all of them.
       const [snap, hist, processes, tree] = await Promise.all([
         getLatestSnapshot(),
-        getSystemHistory(range),
+        getSystemHistory(rangeSeconds(range), settings.rawIntervalSeconds),
         getActiveProcesses(),
         getProcessTree(),
       ]);
@@ -91,7 +106,7 @@ export function useLiveStats(options: UseLiveStatsOptions) {
         setIsLoading(false);
       }
     }
-  }, [range, sortMetric]);
+  }, [range, sortMetric, settings]);
 
   // Start polling. Each tick schedules the next one only after it finishes, so
   // a slow tick can never overlap the next.
@@ -122,6 +137,7 @@ export function useLiveStats(options: UseLiveStatsOptions) {
     history,
     range,
     setRange,
+    availableRanges,
     apps,
     isAppRunning,
     isLoading,
