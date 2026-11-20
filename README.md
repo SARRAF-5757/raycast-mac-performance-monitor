@@ -22,8 +22,8 @@ Check what is putting your Mac under pressure, and which app is causing it, with
 | **Performance Dashboard** | The panels you pick in preferences, two per row, with warning pills for high memory pressure, thermal throttling, high CPU temperature, heavy CPU load and low battery. |
 | **Memory Stats** | Memory pressure over time, RAM composition, and apps sorted by memory footprint. |
 | **CPU Stats** | CPU usage over time and apps sorted by CPU (one full core = 100%). |
-| **GPU Stats** | GPU usage over time and the apps currently using the GPU. |
-| **Disk Stats** | Read and write throughput over time and the apps currently reading or writing. |
+| **GPU Stats** | GPU usage over time and apps sorted by GPU usage. |
+| **Disk Stats** | Read and write throughput over time and apps sorted by disk activity. |
 | **Power & Thermals Stats** | Power draw and CPU / GPU die temperatures over time, and apps sorted by energy impact. |
 | **Copy AI Instructions** | Copies the app's own instructions for AI agents (from its `mpm prompt` command), so an assistant can query your recorded data. |
 
