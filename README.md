@@ -12,7 +12,7 @@ Check what is putting your Mac under pressure, and which app is causing it, with
 
 ## Requirements
 
-- [Mac Performance Monitor](https://github.com/Zesty0wl/mac-performance-monitor/releases) installed in `/Applications`.
+- [Mac Performance Monitor](https://github.com/Zesty0wl/mac-performance-monitor/releases) 2.3.0 or later, installed in `/Applications`.
 - The app running with history recording turned on.
 
 ## Commands
