@@ -20,7 +20,7 @@ export async function readInstalledVersion(): Promise<string | null> {
   if (!fs.existsSync(INFO_PLIST_PATH)) {
     return null;
   }
-  
+
   const result = await execFileAsync("/usr/bin/plutil", [
     "-extract",
     "CFBundleShortVersionString",
@@ -45,7 +45,7 @@ export function isTooOld(version: string): boolean {
     if (i < parts.length) {
       part = Number(parts[i]);
     }
-    
+
     let minimumPart = 0;
     if (i < minimumParts.length) {
       minimumPart = Number(minimumParts[i]);

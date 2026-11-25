@@ -38,7 +38,7 @@ export function cadenceToMs(cadence: Preferences["refreshCadence"]): number {
 
 /** Everything one refresh produces. */
 interface LiveStats {
-  outdatedVersion: string | null;   // The installed app version when it is too old for the extension
+  outdatedVersion: string | null; // The installed app version when it is too old for the extension
   isAppRunning: boolean;
   snapshot: SystemSnapshot | null;
   history: SystemHistoryPoint[];
